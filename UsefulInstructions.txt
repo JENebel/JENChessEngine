@@ -1,0 +1,6 @@
+Index of least significant 1-bit.           n.tzcnt() OR n.trailing_zeros()
+Counts number of 1-bits                     n.popcnt() OR n.count_ones()
+PEXT... bit extraction                      n.pext(mask)
+PDEP... bit deposit
+Isolate least significant bit               n.blsi()    01010100 => 00000100
+Set lowest 1-bit to 0                       n.blsr()    01010100 => 01010000

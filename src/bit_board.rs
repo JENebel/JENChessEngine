@@ -36,7 +36,7 @@ impl BitBoard {
             print!("{}  ", 8 - rank);  
     
             for file in 0..8 {
-                print!( " {} ", if self.get_bit(rank*8 + file) { 1 } else { 0 } )
+                print!( " {} ", if self.get_bit(rank*8 + file) { "X" } else { "." } )
             }
             println!()
         }
