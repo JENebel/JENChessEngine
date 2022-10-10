@@ -30,6 +30,10 @@ impl BitBoard {
         Self { bits: 0 }
     }
 
+    pub fn to_u64(&self) -> u64 {
+        self.bits
+    }
+
     //#[inline(always)]
     pub fn print_bit_board (&self) {
         println!();
@@ -42,7 +46,7 @@ impl BitBoard {
             println!()
         }
         println!( "    a  b  c  d  e  f  g  h");
-        println!( "     Bitboard: {}", self.bits)
+        println!( "    Bitboard: {}", self.bits)
     }
     
     pub fn get_bit(&self, square: u8) -> bool {

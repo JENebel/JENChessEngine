@@ -1,6 +1,6 @@
-use std::isize::MAX;
+use super::*;
 
-use bitintr::Pdep;
+use bitintr::{Pdep, Pext};
 
 use crate::{game::Color, bit_board::BitBoard};
 
@@ -10,11 +10,55 @@ const KNIGHT_ATTACKS: [u64; 64] = generate_knight_attacks();
 const KING_ATTACKS: [u64; 64] = generate_king_attacks();
 
 const ROOK_MASK: [u64; 64] = generate_rook_masks();
+const ROOK_ATTACK_MASK: [u64; 64] = generate_rook_attack_masks();
 const BISHOP_MASK: [u64; 64] = generate_bishop_masks();
+const BISHOP_ATTACK_MASK: [u64; 64] = generate_bishop_attack_masks();
 
-//const SLIDING_ATTACKS: [u16; 500_000] = generate_sliding_attacks().0;
-//const ROOK_OFFSETS: [u64; 64] = generate_sliding_attacks().1;
-//const BISHOP_OFFSETS: [u64; 64] = generate_sliding_attacks().2;
+const SLIDING_ATTACKS: [u16; 107648] = generate_sliding_attacks().0;
+const ROOK_OFFSETS: [usize; 64] = generate_sliding_attacks().1;
+const BISHOP_OFFSETS: [usize; 64] = generate_sliding_attacks().2;
+
+//Getters
+pub fn get_pawn_attack_table(square: u8, color: Color) -> BitBoard {
+    BitBoard::from_u64(
+        if color == Color::White {
+            WHITE_PAWN_ATTACKS[square as usize]
+        }
+        else {
+            BLACK_PAWN_ATTACKS[square as usize]
+        }
+    )
+}
+
+pub fn get_knight_attack_table(square: u8) -> BitBoard {
+    BitBoard::from_u64(
+        KNIGHT_ATTACKS[square as usize]
+    )
+}
+
+pub fn get_king_attack_table(square: u8) -> BitBoard {
+    BitBoard::from_u64(
+        KING_ATTACKS[square as usize]
+    )
+}
+
+pub fn get_rook_attack_table(square: u8, occ: BitBoard) -> BitBoard {
+    let attacks = SLIDING_ATTACKS[(ROOK_OFFSETS[square as usize] as u64 + occ.to_u64().pext(ROOK_MASK[square as usize])) as usize];
+    BitBoard::from_u64(
+        (attacks as u64).pdep(ROOK_ATTACK_MASK[square as usize])
+    )
+}
+
+pub fn get_bishop_attack_table(square: u8, occ: BitBoard) -> BitBoard {
+    let attacks = SLIDING_ATTACKS[(BISHOP_OFFSETS[square as usize] as u64 + occ.to_u64().pext(BISHOP_MASK[square as usize])) as usize];
+    BitBoard::from_u64(
+        (attacks as u64).pdep(BISHOP_ATTACK_MASK[square as usize])
+    )
+}
+
+
+
+
 
 const fn generate_pawn_attacks(color: bool) -> [u64; 64] {
     let mut attacks = [0; 64];
@@ -126,7 +170,25 @@ const fn generate_rook_masks() -> [u64; 64] {
             file += 1;
             index += 1;
         }
-    rank += 1;
+        rank += 1;
+    }
+    mask
+}
+
+const fn generate_rook_attack_masks() -> [u64; 64] {
+    let mut mask = [0; 64];
+
+    let mut index = 0;
+
+    let mut rank: u8 = 0;
+    while rank < 8 {
+        let mut file: u8 = 0;
+        while file < 8 {
+            mask[index] = rook_attacks_on_the_fly(rank*8+file, 0);
+            file += 1;
+            index += 1;
+        }
+        rank += 1;
     }
     mask
 }
@@ -146,6 +208,24 @@ const fn generate_bishop_masks() -> [u64; 64] {
             index += 1;
         }
     rank += 1;
+    }
+    mask
+}
+
+const fn generate_bishop_attack_masks() -> [u64; 64] {
+    let mut mask = [0; 64];
+
+    let mut index = 0;
+
+    let mut rank: u8 = 0;
+    while rank < 8 {
+        let mut file: u8 = 0;
+        while file < 8 {
+            mask[index] = bishop_attacks_on_the_fly(rank*8+file, 0);
+            file += 1;
+            index += 1;
+        }
+        rank += 1;
     }
     mask
 }
@@ -250,53 +330,226 @@ const fn bishop_mask(square: u8) -> u64 {
     result
 }
 
-                                       //Attack table   Rook offs. bishop offs.
-const fn generate_sliding_attacks() -> ([u16; 500_000], [u64; 64], [u64; 64]) {
-    let mut attacks = [MAX; 500_000];
+//returns tuple: (Attack_table, Rook_offsets, bishop_offsets)
+const fn generate_sliding_attacks() -> ([u16; 107648], [usize; 64], [usize; 64]) {
+    let mut attacks: [u16; 107648] = [10_000; 107648];
+    let mut rook_offsets: [usize; 64] = [0; 64];
+    let mut bishop_offsets: [usize; 64] = [0; 64];
 
+    let mut current_offset: u32 = 0;
 
-    //Temp return
-    ([0; 500_000], [0; 64], [0; 64])
-}
+    //ROOKS
+    let mut rank: u8 = 0;
+    while rank < 8 {
+        let mut file: u8 = 0;
+        while file < 8 {
+            let square = rank * 8 + file;
+            rook_offsets[square as usize] = current_offset as usize;
+            let number_of_occupancies = (2 as u16).pow(ROOK_MASK[square as usize].count_ones()) as u32;
 
-const fn rook_attacks_on_the_fly(square: u8, occ: u16) {
-    
-    
-}
-
-const fn set_occupancy
-
-pub fn get_pawn_attack_table(square: u8, color: Color) -> BitBoard {
-    BitBoard::from_u64(
-        if color == Color::White {
-            WHITE_PAWN_ATTACKS[square as usize]
+            let mut occ_index: u32 = 0;
+            while occ_index < number_of_occupancies {
+                let occ = set_occupancy(occ_index, ROOK_MASK[square as usize]);
+                attacks[(current_offset + occ_index as u32) as usize] = const_pext(rook_attacks_on_the_fly(square, occ), ROOK_ATTACK_MASK[square as usize]);
+                occ_index += 1;
+            }
+            
+            current_offset += number_of_occupancies as u32;
+            
+            file += 1;
         }
-        else {
-            BLACK_PAWN_ATTACKS[square as usize]
+    rank += 1;
+    }
+
+    //Bishops
+    let mut rank: u8 = 0;
+    while rank < 8 {
+        let mut file: u8 = 0;
+        while file < 8 {
+            let square = rank * 8 + file;
+            bishop_offsets[square as usize] = current_offset as usize;
+            let number_of_occupancies = (2 as u16).pow(BISHOP_MASK[square as usize].count_ones()) as u32;
+
+            let mut occ_index: u32 = 0;
+            while occ_index < number_of_occupancies {
+                let occ = set_occupancy(occ_index, BISHOP_MASK[square as usize]);
+                attacks[(current_offset + occ_index as u32) as usize] = const_pext(bishop_attacks_on_the_fly(square, occ), BISHOP_ATTACK_MASK[square as usize]);
+                occ_index += 1;
+            }
+            
+            current_offset += number_of_occupancies as u32;
+            
+            file += 1;
         }
-    )
+    rank += 1;
+    }
+
+    (attacks, rook_offsets, bishop_offsets)
 }
 
-pub fn get_knight_attack_table(square: u8) -> BitBoard {
-    BitBoard::from_u64(
-        KNIGHT_ATTACKS[square as usize]
-    )
+const fn const_pext(bits: u64, mask: u64) -> u16 {
+    let mut mask = mask as i128;
+    let mut res: u16 = 0;
+
+    let mut bb = 1;
+    while mask != 0  {
+        if bits as i128 & mask & -mask != 0 {
+            res |= bb;
+        }
+        mask &= mask - 1;
+        bb += bb
+    }
+    res as u16
 }
 
-pub fn get_king_attack_table(square: u8) -> BitBoard {
-    BitBoard::from_u64(
-        KING_ATTACKS[square as usize]
-    )
+const fn rook_attacks_on_the_fly(square: u8, occ: u64) -> u64 {
+    let base: u64 = 1 << (square);
+    let mut result: u64 = 0;
+
+    let mut file = square % 8;
+    let mut offs = 0;
+    //LEFT
+    while file > 0 {
+        offs += 1;
+
+        result |= base >> offs;
+
+        if occ & base >> offs != 0 { break; }
+
+        file -= 1;
+    }
+
+    file = square % 8;
+    offs = 0;
+    //RIGHT
+    while file < 7 {
+        offs += 1;
+
+        result |= base << offs;
+
+        if occ & base << offs != 0 { break; }
+
+        file += 1;
+    }
+
+    let mut rank = square / 8;
+    let mut offs = 0;
+    //UP
+    while rank > 0 {
+        offs += 8;
+
+        result |= base >> offs;
+
+        if occ & base >> offs != 0 { break; }
+
+        rank -= 1;
+    }
+
+    rank = square / 8;
+    offs = 0;
+    //DOWN
+    while rank < 7 {
+        offs += 8;
+
+        result |= base << offs;
+
+        if occ & base << offs != 0 { break; }
+
+        rank += 1;
+    }
+
+    result
 }
 
-pub fn get_rook_mask(square: u8) -> BitBoard {
-    BitBoard::from_u64(
-        ROOK_MASK[square as usize]
-    )
+const fn bishop_attacks_on_the_fly(square: u8, occ: u64) -> u64 {
+    let base: u64 = 1 << (square);
+    let mut result: u64 = 0;
+    let rank = square / 8;
+    let file = square % 8;
+
+    let mut t_rank = rank;
+    let mut t_file = file;
+    let mut offs = 0;
+    //Down-Right
+    while t_rank < 7 && t_file < 7 {
+        offs += 9;
+
+        result |= base << offs;
+
+        if occ & base << offs != 0 { break; }
+
+        t_rank += 1;
+        t_file += 1;
+    }
+
+    t_rank = rank;
+    t_file = file;
+    offs = 0;
+    //Down-Left
+    while t_rank < 7 && t_file > 0 {
+        offs += 7;
+
+        result |= base << offs;
+
+        if occ & base << offs != 0 { break; }
+
+        t_rank += 1;
+        t_file -= 1;
+    }
+
+    t_rank = rank;
+    t_file = file;
+    offs = 0;
+    //Up-Left
+    while t_rank > 0 && t_file > 0 {
+        offs += 9;
+
+        result |= base >> offs;
+
+        if occ & base >> offs != 0 { break; }
+
+        t_rank -= 1;
+        t_file -= 1;
+    }
+
+    t_rank = rank;
+    t_file = file;
+    offs = 0;
+    //Up-Right
+    while t_rank > 0 && t_file < 7 {
+        offs += 7;
+
+        result |= base >> offs;
+
+        if occ & base >> offs != 0 { break; }
+
+        t_rank -= 1;
+        t_file += 1;
+    }
+
+    result
 }
 
-pub fn get_bishop_mask(square: u8) -> BitBoard {
-    BitBoard::from_u64(
-        BISHOP_MASK[square as usize]
-    )
+const fn set_occupancy(index: u32, attack_mask: u64) -> u64 {
+    let mut occ = 0;
+
+    let mut mask = attack_mask;
+
+    let bits_in_mask = attack_mask.count_ones();
+    let mut count: u16 = 0;
+    let mut square;
+    while count < bits_in_mask as u16 {
+        //least significant 1 bit
+        square = mask.trailing_zeros();
+
+        //unset the bit
+        mask ^= 1 << square;
+
+        if (index & (1 << count)) != 0 {
+            occ |= 1 << (square);
+        }
+
+        count += 1;
+    }
+    occ
 }
