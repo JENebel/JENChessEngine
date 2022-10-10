@@ -24,6 +24,7 @@ macro_rules! mlb {
 }
 
 fn main() {
+    
     let n:   u64 =     mlb!(0b00100000
                             0b00000000
                             0b00001010
@@ -64,5 +65,8 @@ fn main() {
    //println!("{}", n.popcnt());
 
     println!("{:#018b}", res1);
-    println!("{:#018b}", res2)
+    println!("{:#018b}", res2);
+    
+
+    //get_bishop_mask(Square::d4 as u8).print_bit_board()
 }

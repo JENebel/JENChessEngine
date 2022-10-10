@@ -22,21 +22,22 @@ pub struct BitBoard {
 }
 
 impl BitBoard {
-    pub fn from_u64(source: u64) -> Self{
+    pub fn from_u64(source: u64) -> Self {
         Self { bits: source }
     }
 
-    pub fn new() -> Self{
+    pub fn new() -> Self {
         Self { bits: 0 }
     }
 
+    //#[inline(always)]
     pub fn print_bit_board (&self) {
         println!();
         for rank in 0..8 {
             print!("{}  ", 8 - rank);  
     
             for file in 0..8 {
-                print!( " {} ", if self.get_bit(rank*8 + file) { "X" } else { "." } )
+                print!( " {} ", if self.get_bit(rank*8 + file) { "X" } else { "-" } )
             }
             println!()
         }
