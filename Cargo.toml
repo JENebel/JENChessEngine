@@ -11,4 +11,3 @@ RUSTFLAGS = "-C link-args=-Wl,-zstack-size=4194304"
 
 [dependencies]
 bitintr = { version = "0.3.0" }
-lazy_static = "1.4.0"

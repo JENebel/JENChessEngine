@@ -13,15 +13,15 @@ pub enum Square {
     a4,  b4,  c4,  d4,  e4,  f4,  g4,  h4,
     a3,  b3,  c3,  d3,  e3,  f3,  g3,  h3,
     a2,  b2,  c2,  d2,  e2,  f2,  g2,  h2,
-    a1,  b1,  c1,  d1,  e1,  f1,  g1,  h1
+    a1,  b1,  c1,  d1,  e1,  f1,  g1,  h1, None
 }
 
 #[derive(Clone, Copy)]
-pub struct BitBoard {
+pub struct Bitboard {
     bits: u64,
 }
 
-impl BitBoard {
+impl Bitboard {
     pub fn from_u64(source: u64) -> Self {
         Self { bits: source }
     }
@@ -41,7 +41,7 @@ impl BitBoard {
             print!("{}  ", 8 - rank);  
     
             for file in 0..8 {
-                print!( " {} ", if self.get_bit(rank*8 + file) { "X" } else { "-" } )
+                print!( " {} ", if self.get_bit(rank*8 + file) { "#" } else { "-" } )
             }
             println!()
         }

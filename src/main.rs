@@ -2,21 +2,24 @@
 #![const_eval_limit = "0"]
 
 mod game;
-mod bit_board;
-mod constants;
+mod bitboard;
 mod attack_tables;
+mod attack_tables_ctg;
+mod cmove;
 
 use game::*;
-use bit_board::*;
-use constants::*;
+use bitboard::*;
 use attack_tables::*;
+use attack_tables_ctg as consts;
 
 fn main() {
-    let mut occ = BitBoard::new();
-    occ.set_bit_sq(Square::c2);
+    let mut occ = Bitboard::new();
+    occ.set_bit_sq(Square::f6);
     occ.set_bit_sq(Square::e4);
 
-    get_rook_attack_table(Square::e2 as u8, occ).print_bit_board();
 
-    get_bishop_attack_table(Square::d5 as u8, occ).print_bit_board();
+
+    println!("{}", get_queen_attack_table(Square::e6 as u8, occ).to_u64());
+    println!("{}", get_rook_attack_table(Square::e6 as u8, occ).to_u64());
+    println!("{}", get_bishop_attack_table(Square::e6 as u8, occ).to_u64());
 }
