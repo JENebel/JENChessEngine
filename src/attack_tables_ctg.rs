@@ -29,8 +29,8 @@ const fn generate_pawn_attacks(color: bool) -> [u64; 64] {
                 if file != 0 { result = result | base >> 9 as u64 }
                 
             } else {
-                if file != 7 { result = result | base << 7 as u64 }
-                if file != 0 { result = result | base << 9 as u64 }
+                if file != 0 { result = result | base << 7 as u64 }
+                if file != 7 { result = result | base << 9 as u64 }
             }
 
             attacks[index] = result;
