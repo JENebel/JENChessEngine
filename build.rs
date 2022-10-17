@@ -71,7 +71,7 @@ fn generate_consts() {
     //Clear file
     File::create(&dest_path).expect("Couldn't clear consts.rs");
 
-//WRITE TO FILE
+    //Open file
     let mut file = fs::OpenOptions::new()
         .write(true)
         .create(true)
@@ -79,6 +79,7 @@ fn generate_consts() {
         .open(&dest_path)
         .unwrap();
 
+    //Write to file
     //Pawns
     write!(file, "{}", array_string(generate_pawn_attacks(true).to_vec(), "u64", "WHITE_PAWN_ATTACKS")).expect("Couldnt write white_pawn_attacks!");
     write!(file, "{}", array_string(generate_pawn_attacks(false).to_vec(), "u64", "BLACK_PAWN_ATTACKS")).expect("Couldnt write black_pawn_attacks!");

@@ -1,30 +1,30 @@
-#![feature(const_eval_limit)]
-#![const_eval_limit = "0"]
-
 mod game;
 mod bitboard;
 mod attack_tables;
 mod cmove;
 mod move_list;
+mod utilities;
 
 use std::{io::{self, BufRead}, process, time::SystemTime};
 
 use game::*;
+
 use cmove::*;
 use bitboard::*;
 use attack_tables::*;
 use move_list::*;
+use utilities::*;
 
 fn main() {
     let mut game = Game::new_from_start_pos();
     println!("{}", "--Engine started--");
-    print_help();
+    //print_help();
 
     let stdin = io::stdin();
     for line in stdin.lock().lines() {
         let input = line.unwrap().trim().to_string();
         if input != "" {
-            let mut split = input.splitn(2, " ");
+            let mut split = input.splitn(2, " ").peekable();
             match split.next().unwrap().to_ascii_lowercase().as_str() {
                 "exit" | "x" => { println!(" {}", "Exited!"); process::exit(0) },
                 "help" => print_help(),
@@ -89,7 +89,15 @@ fn main() {
                     }
                 },*/
                 "psuite" => {
-                    psuite()
+                    if split.peek().is_some() {
+                        let pos = split.next().unwrap().to_string();
+                        if pos == "long" {
+                            psuite_long()
+                        }
+                    }
+                    else {
+                        psuite();
+                    }
                 },
                 /*"eval" => {
                     println!("{}", game.evaluate_position())
@@ -164,6 +172,66 @@ fn psuite() {
     let time = duration1.as_millis()+duration2.as_millis()+duration3.as_millis()+duration4.as_millis()+duration5.as_millis()+duration6.as_millis();
     let total_result = r1+r2+r3+r4+r5+r6;
     println!(" total: {}ms", time);
+    println!(" speed: {}/s", (total_result as f64 / (time as f64 / 1000 as f64)) as u64);
+}
+
+fn psuite_long() {
+    println!(" Long performance test running...");
+    let mut game = Game::new_from_start_pos();
+
+    //startpos
+    let start = SystemTime::now();
+    let r1 = game.perft(6, false);
+    let duration1 = start.elapsed().unwrap();
+    if r1 != 119060324 {println!(" ERROR! Found {} moves for depth 6 on start position, and expected 119,060,324", r1); return }
+    println!(" Perft on starting position at depth 6 found in {}ms", duration1.as_millis());
+
+    //Kiwipete
+    let mut game = Game::new_from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 10");
+    let start = SystemTime::now();
+    let r2 = game.perft(5, false);
+    let duration2 = start.elapsed().unwrap();
+    if r2 != 193690690 {println!(" ERROR! Found {} moves for depth 5 on Kiwipete, and expected 193,690,690", r2);}
+    println!(" Perft on Kiwipete at depth 5 found in {}ms", duration2.as_millis());
+
+    //Position 3
+    let mut game = Game::new_from_fen("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 10");
+    let start = SystemTime::now();
+    let r3 = game.perft(7, false);
+    let duration3 = start.elapsed().unwrap();
+    if r3 != 178633661 {println!(" ERROR! Found {} moves for depth 7 on Position 3, and expected 178,633,661", r3);}
+    println!(" Perft on Position 3 at depth 7 found in {}ms", duration3.as_millis());
+
+    //Position 4
+    let mut game = Game::new_from_fen("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1");
+    let start = SystemTime::now();
+    let r4 = game.perft(6, false);
+    let duration4 = start.elapsed().unwrap();
+    if r4 != 706045033 {println!(" ERROR! Found {} moves for depth 6 on Position 4, and expected 706,045,033", r4);}
+    println!(" Perft on Position 4 at depth 6 found in {}ms", duration4.as_millis());
+
+    //Position 5
+    let mut game = Game::new_from_fen("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8");
+    let start = SystemTime::now();
+    let r5 = game.perft(5, false);
+    let duration5 = start.elapsed().unwrap();
+    if r5 != 89941194 {println!(" ERROR! Found {} moves for depth 5 on Position 5, and expected 89,941,194", r5);}
+    println!(" Perft on Position 5 at depth 5 found in {}ms", duration5.as_millis());
+
+    //Position 6
+    let mut game = Game::new_from_fen("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10");
+    let start = SystemTime::now();
+    let r6 = game.perft(5, false);
+    let duration6 = start.elapsed().unwrap();
+    if r6 != 164075551 {println!(" ERROR! Found {} moves for depth 5 on Position 6, and expected 164,075,551", r6);}
+    println!(" Perft on Position 6 at depth 5 found in {}ms", duration6.as_millis());
+
+    //Result
+    println!("\n Performance test done!\n Results are as follows:");
+    println!(" 1: {}ms\n 2: {}ms\n 3: {}ms\n 4: {}ms\n 5: {}ms\n 6: {}ms", duration1.as_millis(), duration2.as_millis(),duration3.as_millis(),duration4.as_millis(),duration5.as_millis(),duration6.as_millis());
+    let time = duration1.as_millis()+duration2.as_millis()+duration3.as_millis()+duration4.as_millis()+duration5.as_millis()+duration6.as_millis();
+    let total_result = r1+r2+r3+r4+r5+r6;
+    println!(" total: {}ms", time);
     println!(" speed: {}/s", total_result as i128 / (time as i128 / 1000 as i128));
 }
 
@@ -178,6 +246,6 @@ fn print_help() {
     println!("  {}", "perft! [depth]         - Does a simple perft for every PLY up to n");
     println!("  {}", "unmake/undo            - Unmakes last move if possible");
     println!("  {}", "make/move [move]       - Make move with active player. move example: \"h3h4\" in case of promotion, add a Q, R, B or N, so fx. \"a6a7Q\"");
-    println!("  {}", "psuite                 - Performs an extensive performance test with perft on several positions");
+    println!("  {}", "psuite (opt)           - Performs an extensive performance test with perft on several positions. \"opt\" can be \"long\" for longer test");
     println!("  {}", "eval                   - Evaluates the current position, and shows the result");
 }

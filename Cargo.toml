@@ -5,9 +5,8 @@ edition = "2021"
 
 [build]
 target = "native"
-RUSTFLAGS = "-C link-args=-Wl,-zstack-size=4194304"
+RUSTFLAGS = "-C target-cpu=<x86-64-v3>"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bitintr = { version = "0.3.0" }

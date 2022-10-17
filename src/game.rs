@@ -1,22 +1,4 @@
-use core::panic;
-
 use super::*;
-
-#[derive(Debug)]
-#[derive(Clone, Copy)]
-#[derive(PartialEq)]
-pub enum Color {
-    Black,
-    White
-}
-
-#[derive(Clone, Copy)]
-pub enum CastlingAbility {
-    WhiteKingSide = 1,
-    WhiteQueenSide = 2,
-    BlackKingSide = 4,
-    BlackQueenSide = 8
-}
 
 #[derive(Clone, Copy)]
 pub struct Game {
@@ -34,37 +16,6 @@ pub struct Game {
     full_moves: u16,
     half_moves: u8
 }
-
-#[derive(Clone, Copy)]
-pub enum Piece {
-    WhitePawn   = 0,
-    WhiteRook   = 1,
-    WhiteKnight = 2,
-    WhiteBishop = 3,
-    WhiteQueen  = 4,
-    WhiteKing   = 5,
-    BlackPawn   = 6,
-    BlackRook   = 7,
-    BlackKnight = 8,
-    BlackBishop = 9,
-    BlackQueen  = 10,
-    BlackKing   = 11,
-    None        = 12,
-}
-
-#[cfg(test)]
-pub const PIECE_STRINGS: [&str; 12] = ["P", "R", "N", "B", "Q", "K", "p", "r", "n", "b", "q", "k"];
-
-const CASTLING_RIGHTS: [u8; 64] = [
-    7, 15, 15, 15,  3, 15, 15, 11,
-   15, 15, 15, 15, 15, 15, 15, 15,
-   15, 15, 15, 15, 15, 15, 15, 15,
-   15, 15, 15, 15, 15, 15, 15, 15,
-   15, 15, 15, 15, 15, 15, 15, 15,
-   15, 15, 15, 15, 15, 15, 15, 15,
-   15, 15, 15, 15, 15, 15, 15, 15,
-   13, 15, 15, 15, 12, 15, 15, 14
-];
 
 impl Game {
     pub fn pretty_print(&self) {
@@ -679,6 +630,7 @@ impl Game {
         }
 
         //Maybe faster?:
+            //self.bitboards[cmove.piece() as usize].unset_bit(cmove.from_square())
             //Peek make
             //add if not results in check
             //Peek unmake
@@ -708,35 +660,6 @@ impl Game {
         }
 
         result
-    }
-}
-
-pub fn opposite_color(color: Color) -> Color {
-    if color == Color::White { Color::Black } else { Color::White }
-}
-
-pub fn square_from_string(string: &str) -> Square {
-    let chars = string.as_bytes();
-    let x = chars[0] - 97;
-    let y = 8 - (chars[1] as char).to_digit(10).unwrap() as usize;
-    SQUARES[8 * y + x as usize]
-}
-
-pub fn char_to_piece(char: char) -> Piece {
-    match char {
-        'P' => Piece::WhitePawn,
-        'R' => Piece::WhiteRook,
-        'N' => Piece::WhiteKnight,
-        'B' => Piece::WhiteBishop,
-        'Q' => Piece::WhiteQueen,
-        'K' => Piece::WhiteKing,
-        'p' => Piece::BlackPawn,
-        'r' => Piece::BlackRook,
-        'n' => Piece::BlackKnight,
-        'b' => Piece::BlackBishop,
-        'q' => Piece::BlackQueen,
-        'k' => Piece::BlackKing,
-        _ => panic!("Illegal piece char: {}", char)
     }
 }
 
