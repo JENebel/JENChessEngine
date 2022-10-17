@@ -1,6 +1,4 @@
-use bitintr::{Pext, Blsr};
-
-use crate::*;
+use bitintr::{Blsr};
 
 #[derive(Copy, Clone)]
 #[derive(PartialEq)]
@@ -60,7 +58,8 @@ impl Bitboard {
         self.bits
     }
 
-    //#[inline(always)]
+    #[cfg(test)]
+    #[allow(dead_code)]
     pub fn print (&self) {
         println!();
         for rank in 0..8 {
@@ -79,6 +78,7 @@ impl Bitboard {
         self.bits & (1 << square) != 0
     }
     
+    #[cfg(test)]
     pub fn get_bit_sq(&self, square: Square) -> bool {
         self.get_bit(square as u8)
     }
@@ -120,13 +120,13 @@ impl Bitboard {
         Self { bits: self.bits & other.bits }
     }
 
-    pub fn or(&self, other: Bitboard) -> Self {
+    /*pub fn or(&self, other: Bitboard) -> Self {
         Self { bits: self.bits | other.bits }
     }
 
     pub fn xor(&self, other: Bitboard) -> Self {
         Self { bits: self.bits ^ other.bits }
-    }
+    }*/
 }
 
 pub fn not(bitboard: Bitboard) -> Bitboard {

@@ -1,3 +1,4 @@
+#[cfg(test)]
 use super::*;
 
 #[derive(Clone, Copy)]
@@ -30,6 +31,7 @@ impl Move {
         Self { data: data }
     }
 
+    #[cfg(test)]
     pub fn new_friendly(from_square: Square,        // 0x3f
                         to_square: Square,          // 0xfc0
                         piece: Piece,               // 0xf000
@@ -74,6 +76,7 @@ impl Move {
         (self.data & 0x800000) == 0x800000
     }
 
+    #[cfg(test)]
     pub fn print(&self) {
         print!(" From: {}", SQUARE_STRINGS[self.from_square() as usize]);
         print!("    To: {}", SQUARE_STRINGS[self.to_square() as usize]);

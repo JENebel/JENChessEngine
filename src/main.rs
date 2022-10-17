@@ -109,7 +109,7 @@ fn perft(depth: u8, mut game: Game) {
 }
 
 fn perft_detail(depth: u8, mut game: Game) {
-    let mut res = game.perft(depth, true);
+    let res = game.perft(depth, true);
     println!(" Total legal found: {}", res);
 }
 

@@ -1,5 +1,4 @@
 use core::panic;
-use std::ops::Index;
 
 use super::*;
 
@@ -53,6 +52,7 @@ pub enum Piece {
     None        = 12,
 }
 
+#[cfg(test)]
 pub const PIECE_STRINGS: [&str; 12] = ["P", "R", "N", "B", "Q", "K", "p", "r", "n", "b", "q", "k"];
 
 const CASTLING_RIGHTS: [u8; 64] = [
@@ -192,6 +192,8 @@ impl Game {
         }
     }
 
+    #[cfg(test)]
+    #[allow(dead_code)]
     pub fn print_attacked_squares (&self, by_color: Color) {
         let mut bitboard = Bitboard::new();
         for square in 0..64 {
@@ -214,9 +216,9 @@ impl Game {
     }
 
     pub fn generate_moves(&mut self) -> MoveList {
-        let mut moves = MoveList::new(&self);
-        let mut from_sq: u8 = 0;
-        let mut to_sq:   u8 = 0;
+        let mut moves = MoveList::new();
+        let mut from_sq: u8;
+        let mut to_sq:   u8;
 
         let mut attacks: Bitboard;
         let mut quiet: Bitboard;
@@ -229,7 +231,6 @@ impl Game {
         let mut king_bitboard;
 
         let opponent_occupancies: Bitboard;
-        let own_occupancies: Bitboard;
 
         let rook;
         let knight;
@@ -240,7 +241,6 @@ impl Game {
         //Color specific
         //WHITE
         if self.active_player == Color::White {
-            own_occupancies = self.white_occupancies;
             opponent_occupancies = self.black_occupancies;
             pawn_bitboard =     self.get_piece_bitboard(Piece::WhitePawn);
             rook_bitboard =     self.get_piece_bitboard(Piece::WhiteRook);
@@ -327,7 +327,6 @@ impl Game {
         }
         //BLACK
         else {
-            own_occupancies = self.black_occupancies;
             opponent_occupancies = self.white_occupancies;
             pawn_bitboard = self.get_piece_bitboard(Piece::BlackPawn);
             rook_bitboard = self.get_piece_bitboard(Piece::BlackRook);
@@ -963,7 +962,7 @@ mod move_gen_tests {
 
     #[test]
     pub fn is_in_check_is_true_when_in_check_by_rook() {
-        let mut game = Game::new_from_fen("k7/8/8/8/4r3/8/8/4K3 w K - 0 25");
+        let game = Game::new_from_fen("k7/8/8/8/4r3/8/8/4K3 w K - 0 25");
         assert_eq!(game.is_in_check(Color::White), true);
     }
 

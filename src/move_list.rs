@@ -1,5 +1,3 @@
-use std::iter::Map;
-
 use super::*;
 pub struct MoveList {
     moves: [Option<Move>; 256],
@@ -7,7 +5,7 @@ pub struct MoveList {
 }
 
 impl MoveList {
-    pub fn new(game: &Game) -> Self {
+    pub fn new() -> Self {
         Self {
             moves: [None; 256],
             count: 0
@@ -19,6 +17,7 @@ impl MoveList {
         self.count += 1;
     }
 
+    #[cfg(test)]
     pub fn print(&self) {
         println!("Move count: {}", self.count);
         for i in 0..self.count {
@@ -37,14 +36,13 @@ impl MoveList {
             None => unreachable!(),
         }
     }
-}
 
-#[cfg(test)]
-impl MoveList {
+    #[cfg(test)]
     pub fn contains(&self, cmove: &Move) -> bool {
         return self.moves.contains(&Some(*cmove))
     }
 
+    #[cfg(test)]
     pub fn all_from(&self, square: Square) -> Vec<Move> {
         let mut v: Vec<Move> = Vec::new();
 
