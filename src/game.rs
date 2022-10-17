@@ -684,7 +684,6 @@ impl Game {
             //Peek unmake
     }
 
-    #[inline(always)]
     pub fn perft(&mut self, depth: u8, print: bool) -> u128 {
         let moves = self.generate_moves();
 

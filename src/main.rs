@@ -4,7 +4,6 @@
 mod game;
 mod bitboard;
 mod attack_tables;
-mod attack_tables_ctg;
 mod cmove;
 mod move_list;
 
@@ -44,12 +43,12 @@ fn main() {
                     let mut split2 = split.next().unwrap().splitn(2, " ");
                     let pos = split2.next().unwrap().to_string();
                     let depth = (if pos == "simple" { split2.next().unwrap() } else { pos.as_str() }).parse::<u8>().unwrap();
-                    if pos == "simple" { perft(depth, game); } else { perft_detail(depth, game) };
+                    perft(depth, game, pos != "simple");
                 },
                 "perft!" => {
                     let depth = split.next().unwrap().parse::<u8>().unwrap();
                     for i in 1..depth + 1 {
-                        perft(i, game)
+                        perft(i, game, false)
                     }
                     println!(" Done with perft!")
                 },
@@ -101,16 +100,11 @@ fn main() {
     }
 }
 
-fn perft(depth: u8, mut game: Game) {
+fn perft(depth: u8, mut game: Game, detail: bool) {
     let start = SystemTime::now();
-    let result = game.perft(depth, false);
+    let result = game.perft(depth, detail);
     let duration = start.elapsed().unwrap();
     println!(" Found {} moves for depth {} in {}ms", result, depth, duration.as_millis());
-}
-
-fn perft_detail(depth: u8, mut game: Game) {
-    let res = game.perft(depth, true);
-    println!(" Total legal found: {}", res);
 }
 
 fn psuite() {

@@ -1,20 +1,123 @@
-pub const WHITE_PAWN_ATTACKS: [u64; 64] = generate_pawn_attacks(true);
-pub const BLACK_PAWN_ATTACKS: [u64; 64] = generate_pawn_attacks(false);
-pub const KNIGHT_ATTACKS: [u64; 64] = generate_knight_attacks();
-pub const KING_ATTACKS: [u64; 64] = generate_king_attacks();
+use std::{env, path::Path, fs::{self, File}, io::Write};
 
 pub const ROOK_MASK: [u64; 64] = generate_rook_masks();
 pub const ROOK_ATTACK_MASK: [u64; 64] = generate_rook_attack_masks();
 pub const BISHOP_MASK: [u64; 64] = generate_bishop_masks();
 pub const BISHOP_ATTACK_MASK: [u64; 64] = generate_bishop_attack_masks();
 
-pub const SLIDING_ATTACKS: [u16; 107648] = generate_sliding_attacks().0;
-pub const ROOK_OFFSETS: [usize; 64] = generate_sliding_attacks().1;
-pub const BISHOP_OFFSETS: [usize; 64] = generate_sliding_attacks().2;
+fn main() {
+    generate_consts()
+}
 
-const fn generate_pawn_attacks(color: bool) -> [u64; 64] {
+fn generate_consts() {
+    //Sliding pieces
+    let mut attacks: [u64; 107648] = [0; 107648];
+    let mut rook_offsets: [u64; 64] = [0; 64];
+    let mut bishop_offsets: [u64; 64] = [0; 64];
+    {
+        let mut current_offset: u32 = 0;
+
+        //ROOKS
+        let mut rank: u8 = 0;
+        while rank < 8 {
+            let mut file: u8 = 0;
+            while file < 8 {
+                let square = rank * 8 + file;
+                rook_offsets[square as usize] = current_offset as u64;
+                let number_of_occupancies = (2 as u16).pow(ROOK_MASK[square as usize].count_ones()) as u32;
+
+                let mut occ_index: u32 = 0;
+                while occ_index < number_of_occupancies {
+                    let occ = set_occupancy(occ_index, ROOK_MASK[square as usize]);
+                    attacks[(current_offset + occ_index as u32) as usize] = rook_attacks_on_the_fly(square, occ);
+                    occ_index += 1;
+                }
+                
+                current_offset += number_of_occupancies as u32;
+                
+                file += 1;
+            }
+        rank += 1;
+        }
+        //OFFSET HER: 104600 i believe
+        //Bishops
+        let mut rank: u8 = 0;
+        while rank < 8 {
+            let mut file: u8 = 0;
+            while file < 8 {
+                let square = rank * 8 + file;
+                bishop_offsets[square as usize] = current_offset as u64;
+                let number_of_occupancies = (2 as u16).pow(BISHOP_MASK[square as usize].count_ones()) as u32;
+
+                let mut occ_index: u32 = 0;
+                while occ_index < number_of_occupancies {
+                    let occ = set_occupancy(occ_index, BISHOP_MASK[square as usize]);
+                    attacks[(current_offset + occ_index as u32) as usize] = bishop_attacks_on_the_fly(square, occ);
+                    occ_index += 1;
+                }
+                
+                current_offset += number_of_occupancies as u32;
+                
+                file += 1;
+            }
+        rank += 1;
+        }
+    }
+
+    //Find file
+    let out_dir = env::var("OUT_DIR").unwrap();
+    let dest_path = Path::new(&out_dir).join("consts.rs");
+
+    //Clear file
+    File::create(&dest_path).expect("Couldn't clear consts.rs");
+
+//WRITE TO FILE
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .append(true)
+        .open(&dest_path)
+        .unwrap();
+
+    //Pawns
+    write!(file, "{}", array_string(generate_pawn_attacks(true).to_vec(), "u64", "WHITE_PAWN_ATTACKS")).expect("Couldnt write white_pawn_attacks!");
+    write!(file, "{}", array_string(generate_pawn_attacks(false).to_vec(), "u64", "BLACK_PAWN_ATTACKS")).expect("Couldnt write black_pawn_attacks!");
+
+    //Leapers
+    write!(file, "{}", array_string(generate_knight_attacks().to_vec(), "u64", "KNIGHT_ATTACKS")).expect("Couldnt write knight_attacks!");
+    write!(file, "{}", array_string(generate_king_attacks().to_vec(), "u64", "KING_ATTACKS")).expect("Couldnt write king_attacks!");
+
+    //Sliding pieces
+    write!(file, "{}", array_string(ROOK_MASK.to_vec(), "u64", "ROOK_MASK")).expect("Couldnt write rook_masks!");
+    write!(file, "{}", array_string(BISHOP_MASK.to_vec(), "u64", "BISHOP_MASK")).expect("Couldnt write bishop_masks!");
+
+    write!(file, "{}", array_string(rook_offsets.to_vec(), "usize", "ROOK_OFFSETS")).expect("Couldnt write rook_offsets!");
+    write!(file, "{}", array_string(bishop_offsets.to_vec(), "usize", "BISHOP_OFFSETS")).expect("Couldnt write bishop_offsets!");
+    write!(file, "{}", array_string(attacks.to_vec(), "u64", "SLIDING_ATTACKS")).expect("Couldnt write sliding_attacks!");
+}
+
+
+
+fn array_string(data: Vec<u64>, type_string: &str, cons_name: &str) -> String {
+    let len = data.len();
+    let mut result = (if len < 10000 { "const "} else { "static " } ).to_string();
+    result += cons_name;
+    result += &format!(": [{}; {}] = [", type_string, len).to_string();
+
+    let line_width = (len as f64).sqrt() as usize;
+    for i in 0..len {
+        if i % line_width == 0 { result += "\n" }
+        result += &format!("{}{}", data[i], if i == len-1 {""} else {", "}).to_string();
+    }
+    result += "\n];\n\n";
+
+    result
+}
+
+
+fn generate_pawn_attacks(color: bool) -> [u64; 64] {
     let mut attacks = [0; 64];
-
+    
     let mut index = 0;
 
     let mut rank: u8 = 0;
@@ -43,7 +146,7 @@ const fn generate_pawn_attacks(color: bool) -> [u64; 64] {
     attacks
 }
 
-const fn generate_knight_attacks() -> [u64; 64] {
+fn generate_knight_attacks() -> [u64; 64] {
     let mut attacks = [0; 64];
 
     let mut index = 0;
@@ -77,7 +180,7 @@ const fn generate_knight_attacks() -> [u64; 64] {
     attacks
 }
 
-const fn generate_king_attacks() -> [u64; 64] {
+fn generate_king_attacks() -> [u64; 64] {
     let mut attacks = [0; 64];
 
     let mut index = 0;
@@ -280,78 +383,6 @@ const fn bishop_mask(square: u8) -> u64 {
     }
 
     result
-}
-
-//returns tuple: (Attack_table, Rook_offsets, bishop_offsets)
-const fn generate_sliding_attacks() -> ([u16; 107648], [usize; 64], [usize; 64]) {
-    let mut attacks: [u16; 107648] = [0; 107648];
-    let mut rook_offsets: [usize; 64] = [0; 64];
-    let mut bishop_offsets: [usize; 64] = [0; 64];
-
-    let mut current_offset: u32 = 0;
-
-    //ROOKS
-    let mut rank: u8 = 0;
-    while rank < 8 {
-        let mut file: u8 = 0;
-        while file < 8 {
-            let square = rank * 8 + file;
-            rook_offsets[square as usize] = current_offset as usize;
-            let number_of_occupancies = (2 as u16).pow(ROOK_MASK[square as usize].count_ones()) as u32;
-
-            let mut occ_index: u32 = 0;
-            while occ_index < number_of_occupancies {
-                let occ = set_occupancy(occ_index, ROOK_MASK[square as usize]);
-                attacks[(current_offset + occ_index as u32) as usize] = const_pext(rook_attacks_on_the_fly(square, occ), ROOK_ATTACK_MASK[square as usize]);
-                occ_index += 1;
-            }
-            
-            current_offset += number_of_occupancies as u32;
-            
-            file += 1;
-        }
-    rank += 1;
-    }
-    //OFFSET HER: 104600 i believe
-    //Bishops
-    let mut rank: u8 = 0;
-    while rank < 8 {
-        let mut file: u8 = 0;
-        while file < 8 {
-            let square = rank * 8 + file;
-            bishop_offsets[square as usize] = current_offset as usize;
-            let number_of_occupancies = (2 as u16).pow(BISHOP_MASK[square as usize].count_ones()) as u32;
-
-            let mut occ_index: u32 = 0;
-            while occ_index < number_of_occupancies {
-                let occ = set_occupancy(occ_index, BISHOP_MASK[square as usize]);
-                attacks[(current_offset + occ_index as u32) as usize] = const_pext(bishop_attacks_on_the_fly(square, occ), BISHOP_ATTACK_MASK[square as usize]);
-                occ_index += 1;
-            }
-            
-            current_offset += number_of_occupancies as u32;
-            
-            file += 1;
-        }
-    rank += 1;
-    }
-
-    (attacks, rook_offsets, bishop_offsets)
-}
-
-const fn const_pext(bits: u64, mask: u64) -> u16 {
-    let mut mask = mask as i128;
-    let mut res: u16 = 0;
-
-    let mut bb = 1;
-    while mask != 0  {
-        if bits as i128 & mask & -mask != 0 {
-            res |= bb;
-        }
-        mask &= mask - 1;
-        bb += bb
-    }
-    res as u16
 }
 
 const fn rook_attacks_on_the_fly(square: u8, occ: u64) -> u64 {
