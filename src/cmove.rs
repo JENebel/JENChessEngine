@@ -1,4 +1,3 @@
-#[cfg(test)]
 use super::*;
 
 #[derive(Clone, Copy)]
@@ -74,6 +73,15 @@ impl Move {
 
     pub fn is_castling(&self) -> bool {
         (self.data & 0x800000) == 0x800000
+    }
+
+    pub fn to_uci(&self) -> String {
+        let mut result = SQUARE_STRINGS[self.from_square() as usize].to_string();
+        result += SQUARE_STRINGS[self.to_square() as usize];
+        if self.promotion() != Piece::None as u8 {
+            result += PIECE_STRINGS[self.promotion() as usize].to_lowercase().as_str()
+        }
+        result
     }
 
     #[cfg(test)]

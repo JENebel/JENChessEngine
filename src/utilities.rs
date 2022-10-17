@@ -10,21 +10,21 @@ pub fn square_from_string(string: &str) -> Square {
     SQUARES[8 * y + x as usize]
 }
 
-pub fn char_to_piece(char: char) -> Piece {
+pub fn char_to_piece(char: char) -> Option<Piece> {
     match char {
-        'P' => Piece::WhitePawn,
-        'R' => Piece::WhiteRook,
-        'N' => Piece::WhiteKnight,
-        'B' => Piece::WhiteBishop,
-        'Q' => Piece::WhiteQueen,
-        'K' => Piece::WhiteKing,
-        'p' => Piece::BlackPawn,
-        'r' => Piece::BlackRook,
-        'n' => Piece::BlackKnight,
-        'b' => Piece::BlackBishop,
-        'q' => Piece::BlackQueen,
-        'k' => Piece::BlackKing,
-        _ => panic!("Illegal piece char: {}", char)
+        'P' => Some(Piece::WhitePawn),
+        'R' => Some(Piece::WhiteRook),
+        'N' => Some(Piece::WhiteKnight),
+        'B' => Some(Piece::WhiteBishop),
+        'Q' => Some(Piece::WhiteQueen),
+        'K' => Some(Piece::WhiteKing),
+        'p' => Some(Piece::BlackPawn),
+        'r' => Some(Piece::BlackRook),
+        'n' => Some(Piece::BlackKnight),
+        'b' => Some(Piece::BlackBishop),
+        'q' => Some(Piece::BlackQueen),
+        'k' => Some(Piece::BlackKing),
+        _ => None
     }
 }
 
@@ -61,8 +61,7 @@ pub enum Piece {
     None        = 12,
 }
 
-#[cfg(test)]
-pub const PIECE_STRINGS: [&str; 12] = ["P", "R", "N", "B", "Q", "K", "p", "r", "n", "b", "q", "k"];
+pub const PIECE_STRINGS: [&str; 13] = ["P", "R", "N", "B", "Q", "K", "p", "r", "n", "b", "q", "k", "None"];
 
 pub const CASTLING_RIGHTS: [u8; 64] = [
     7, 15, 15, 15,  3, 15, 15, 11,

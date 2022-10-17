@@ -30,8 +30,6 @@ impl MoveList {
         self.count
     }
 
-    #[cfg(test)]
-    #[allow(dead_code)]
     pub fn get(&self, index: usize) -> &Move {
         match &self.moves[index] {
             Some(m) => &m,

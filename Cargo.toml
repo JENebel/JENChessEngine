@@ -11,3 +11,4 @@ RUSTFLAGS = "-C target-cpu=<x86-64-v3>"
 [dependencies]
 bitintr = { version = "0.3.0" }
 rayon = { version = "1.5.3" }
+rand = "0.8"

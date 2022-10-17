@@ -1,5 +1,6 @@
 use super::*;
 use rayon::prelude::*;
+use rand::Rng;
 
 #[derive(Clone, Copy)]
 pub struct Game {
@@ -65,10 +66,10 @@ impl Game {
     }
 
     pub fn new_from_start_pos() -> Self {
-        Game::new_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+        Game::new_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap()
     }
 
-    pub fn new_from_fen(input: &str) -> Self {
+    pub fn new_from_fen(input: &str) -> Option<Self> {
         let fen = input.trim();
         let mut split = fen.split(' ').peekable();
 
@@ -78,7 +79,10 @@ impl Game {
         let mut all_occupancies =   Bitboard::new();
 
         let mut i = 0;
+
+        if split.peek().is_none() { return None }
         let board_str = split.next().unwrap();
+
         for char in board_str.chars() {
             if char.is_numeric(){
                 for _i in 0..char.to_digit(10).unwrap_or(0) {
@@ -86,7 +90,9 @@ impl Game {
                 }
             }
             else if char != '/' {
-                bitboards[char_to_piece(char) as usize].set_bit(i);
+                let piece = char_to_piece(char);
+                if piece.is_none() { return None };
+                bitboards[char_to_piece(char).unwrap() as usize].set_bit(i);
                 all_occupancies.set_bit(i);
                 if char.is_uppercase() { white_occupancies.set_bit(i) } else { black_occupancies.set_bit(i) };
 
@@ -94,6 +100,7 @@ impl Game {
             }
         }
 
+        if split.peek().is_none() { return None }
         let active = split.next().unwrap();
         let active_color = if active == "w" { Color::White } else { Color::Black };
 
@@ -110,7 +117,7 @@ impl Game {
         let half_moves: u8 =  if split.peek().is_some() { split.next().unwrap().parse::<u8>().unwrap()  } else { 0 };
         let full_moves: u16 = if split.peek().is_some() { split.next().unwrap().parse::<u16>().unwrap() } else { 0 };
 
-        Self { 
+        Some(Self { 
             bitboards: bitboards,
             white_occupancies: white_occupancies,
             black_occupancies: black_occupancies,
@@ -122,7 +129,7 @@ impl Game {
 
             full_moves: full_moves,
             half_moves: half_moves
-        }
+        })
     }
 
     fn is_square_attacked(&self, square: u8, by_color: Color) -> bool {
@@ -716,6 +723,21 @@ impl Game {
             r
         }).sum()
     }
+
+    pub fn parse_move(&mut self, input: String) -> Option<Move> {
+        let moves = self.generate_moves().values();
+        let m = moves.iter().find(|m| m.to_uci() == input);
+        match m {
+            Some(a) => Some(a.clone()),
+            None => None,
+        }
+    }
+
+    pub fn search_random(&mut self) -> Move {
+        let moves = self.generate_moves();
+        let rand = rand::thread_rng().gen_range(0..moves.len());
+        moves.get(rand).clone()
+    }
 }
 
 #[cfg(test)]
@@ -732,7 +754,7 @@ mod move_gen_tests {
 
     #[test]
     pub fn black_pawn_can_move_one_tile_forward() {
-        let mut game =  Game::new_from_fen("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1");
+        let mut game =  Game::new_from_fen("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1").unwrap();
         let moves = game.generate_moves();
         assert!(moves.contains(&Move::new_friendly(Square::c7, Square::c6, Piece::BlackPawn, Piece::None, false, false, false, false)));
     }
@@ -746,14 +768,14 @@ mod move_gen_tests {
 
     #[test]
     pub fn black_pawn_can_correctly_double_push() {
-        let mut game = Game::new_from_fen("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1");
+        let mut game = Game::new_from_fen("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1").unwrap();
         let moves = game.generate_moves();
         assert!(moves.contains(&Move::new_friendly(Square::c7, Square::c5, Piece::BlackPawn, Piece::None, false, true, false, false)));
     }
 
     #[test]
     pub fn pawn_can_capture_on_both_diagonals() {
-        let mut game = Game::new_from_fen("1k6/8/8/4p1b1/5P2/8/8/1K6 w - - 0 25");
+        let mut game = Game::new_from_fen("1k6/8/8/4p1b1/5P2/8/8/1K6 w - - 0 25").unwrap();
         let moves = game.generate_moves();
         assert!(moves.contains(&Move::new_friendly(Square::f4, Square::e5, Piece::WhitePawn, Piece::None, true, false, false, false)));
         assert!(moves.contains(&Move::new_friendly(Square::f4, Square::g5, Piece::WhitePawn, Piece::None, true, false, false, false)));
@@ -761,7 +783,7 @@ mod move_gen_tests {
 
     #[test]
     pub fn white_can_enpassant_capture_correctly() {
-        let mut game = Game::new_from_fen("k7/8/8/4Pp2/8/8/8/K7 w - f6 0 25");
+        let mut game = Game::new_from_fen("k7/8/8/4Pp2/8/8/8/K7 w - f6 0 25").unwrap();
         let moves = game.generate_moves();
         moves.print();
         assert!(moves.contains(&Move::new_friendly(Square::e5, Square::f6, Piece::WhitePawn, Piece::None, false, false, true, false)));
@@ -769,35 +791,35 @@ mod move_gen_tests {
 
     #[test]
     pub fn black_can_enpassant_capture_correctly() {
-        let mut game = Game::new_from_fen("k7/8/8/8/8/pP6/8/7K b - b2 0 25");
+        let mut game = Game::new_from_fen("k7/8/8/8/8/pP6/8/7K b - b2 0 25").unwrap();
         let moves = game.generate_moves();
         assert!(moves.contains(&Move::new_friendly(Square::a3, Square::b2, Piece::BlackPawn, Piece::None, false, false, true, false)));
     }
 
     #[test]
     pub fn can_not_move_pawn_when_piece_in_the_way() {
-        let mut game = Game::new_from_fen("k7/8/8/8/8/1N6/1P6/K7 w - - 0 25");
+        let mut game = Game::new_from_fen("k7/8/8/8/8/1N6/1P6/K7 w - - 0 25").unwrap();
         let moves = game.generate_moves().all_from(Square::b2);
         assert_eq!(moves.len(), 0);
     }
 
     #[test]
     pub fn white_pawn_should_have_4_promotion_options_when_reaching_back_row() {
-        let mut game = Game::new_from_fen("k7/2P5/8/8/8/8/8/K7 w - - 0 25");
+        let mut game = Game::new_from_fen("k7/2P5/8/8/8/8/8/K7 w - - 0 25").unwrap();
         let moves = game.generate_moves().all_from(Square::c7);
         assert_eq!(moves.len(), 4);
     }
 
     #[test]
     pub fn black_pawn_should_have_4_promotion_options_when_reaching_back_row() {
-        let mut game = Game::new_from_fen("k7/8/8/8/8/8/2p5/K7 b - - 0 25");
+        let mut game = Game::new_from_fen("k7/8/8/8/8/8/2p5/K7 b - - 0 25").unwrap();
         let moves = game.generate_moves().all_from(Square::c2);
         assert_eq!(moves.len(), 4);
     }
 
     #[test]
     pub fn should_be_able_to_promote_on_back_row_capture() {
-        let mut game = Game::new_from_fen("k2r4/2P5/8/8/8/8/8/K7 w - - 0 25");
+        let mut game = Game::new_from_fen("k2r4/2P5/8/8/8/8/8/K7 w - - 0 25").unwrap();
         let moves = game.generate_moves().all_from(Square::c7);
         assert_eq!(moves.len(), 8);
     }
@@ -813,7 +835,7 @@ mod move_gen_tests {
 
     #[test]
     pub fn king_can_move_in_all_directions() {
-        let mut game = Game::new_from_fen("8/1K6/8/4k3/8/8/8/8 w - - 0 25");
+        let mut game = Game::new_from_fen("8/1K6/8/4k3/8/8/8/8 w - - 0 25").unwrap();
         let moves = game.generate_moves().all_from(Square::b7);
         assert!(moves.len() == 8);
         assert!(moves.contains(&Move::new_friendly(Square::b7, Square::a8, Piece::WhiteKing, Piece::None, false, false, false, false)));
@@ -822,7 +844,7 @@ mod move_gen_tests {
 
     #[test]
     pub fn king_cannot_move_over_edge() {
-        let mut game = Game::new_from_fen("8/K7/8/4k3/8/8/8/8 w - - 0 25");
+        let mut game = Game::new_from_fen("8/K7/8/4k3/8/8/8/8 w - - 0 25").unwrap();
         let moves = game.generate_moves().all_from(Square::a7);
         assert!(moves.len() == 5);
         assert!(moves.contains(&Move::new_friendly(Square::a7, Square::a8, Piece::WhiteKing, Piece::None, false, false, false, false)));
@@ -845,7 +867,7 @@ mod move_gen_tests {
 
     #[test]
     pub fn queen_has_correct_number_of_legal_moves_on_open_board() {
-        let mut game = Game::new_from_fen("K7/8/8/8/3Q4/8/8/7k w - - 0 25");
+        let mut game = Game::new_from_fen("K7/8/8/8/3Q4/8/8/7k w - - 0 25").unwrap();
         let moves = game.generate_moves().all_from(Square::d4);
         assert!(moves.len() == 27);
         assert!(moves.contains(&Move::new_friendly(Square::d4, Square::d1, Piece::WhiteQueen, Piece::None, false, false, false, false)));
@@ -853,35 +875,35 @@ mod move_gen_tests {
 
     #[test]
     pub fn rook_has_correct_number_of_legal_moves_on_open_board() {
-        let mut game = Game::new_from_fen("K7/8/8/8/3R4/8/8/7k w - - 0 25");
+        let mut game = Game::new_from_fen("K7/8/8/8/3R4/8/8/7k w - - 0 25").unwrap();
         let moves = game.generate_moves().all_from(Square::d4);
         assert!(moves.len() == 14);
     }
 
     #[test]
     pub fn bishop_has_correct_number_of_legal_moves_on_open_board() {
-        let mut game = Game::new_from_fen("K7/8/8/8/3B4/8/8/7k w - - 0 25");
+        let mut game = Game::new_from_fen("K7/8/8/8/3B4/8/8/7k w - - 0 25").unwrap();
         let moves = game.generate_moves().all_from(Square::d4);
         assert!(moves.len() == 13);
     }
 
     #[test]
     pub fn queen_has_correct_number_of_moves_when_friendlies_in_the_way() {
-        let mut game = Game::new_from_fen("8/1KR5/1QN5/1BB5/8/8/8/7k w - - 0 25");
+        let mut game = Game::new_from_fen("8/1KR5/1QN5/1BB5/8/8/8/7k w - - 0 25").unwrap();
         let moves = game.generate_moves().all_from(Square::b6);
         assert!(moves.len() == 3);
     }
 
     #[test]
     pub fn queen_has_correct_number_of_moves_when_enemies_in_the_way() {
-        let mut game = Game::new_from_fen("7K/1rr5/1Qb5/1nb5/8/8/8/7k w - - 0 25");
+        let mut game = Game::new_from_fen("7K/1rr5/1Qb5/1nb5/8/8/8/7k w - - 0 25").unwrap();
         let moves = game.generate_moves().all_from(Square::b6);
         assert!(moves.len() == 8);
     }
 
     #[test]
     pub fn castling_moves_are_found_for_white() {
-        let mut game = Game::new_from_fen("4k3/8/8/8/8/8/8/R3K2R w KQ - 0 25");
+        let mut game = Game::new_from_fen("4k3/8/8/8/8/8/8/R3K2R w KQ - 0 25").unwrap();
         let moves = game.generate_moves().all_from(Square::e1);
         assert!(moves.contains(&Move::new_friendly(Square::e1, Square::g1, Piece::WhiteKing, Piece::None, false, false, false, true)));
         assert!(moves.contains(&Move::new_friendly(Square::e1, Square::c1, Piece::WhiteKing, Piece::None, false, false, false, true)));
@@ -889,7 +911,7 @@ mod move_gen_tests {
 
     #[test]
     pub fn castling_moves_are_found_for_black() {
-        let mut game = Game::new_from_fen("r3k2r/8/8/8/8/8/8/4K3 b kq - 0 25");
+        let mut game = Game::new_from_fen("r3k2r/8/8/8/8/8/8/4K3 b kq - 0 25").unwrap();
         let moves = game.generate_moves().all_from(Square::e8);
         assert!(moves.contains(&Move::new_friendly(Square::e8, Square::g8, Piece::BlackKing, Piece::None, false, false, false, true)));
         assert!(moves.contains(&Move::new_friendly(Square::e8, Square::c8, Piece::BlackKing, Piece::None, false, false, false, true)));
@@ -897,21 +919,21 @@ mod move_gen_tests {
 
     #[test]
     pub fn castling_moves_are_not_found_when_unavailable() {
-        let mut game = Game::new_from_fen("4k3/8/8/8/8/8/8/R3K2R w - - 0 25");
+        let mut game = Game::new_from_fen("4k3/8/8/8/8/8/8/R3K2R w - - 0 25").unwrap();
         let moves = game.generate_moves().all_from(Square::e1);
         assert!(moves.len() == 5);
     }
 
     #[test]
     pub fn cant_castle_if_pieces_in_the_way() {
-        let mut game = Game::new_from_fen("4k3/8/8/8/8/8/8/RR2K1NR w KQ - 0 25");
+        let mut game = Game::new_from_fen("4k3/8/8/8/8/8/8/RR2K1NR w KQ - 0 25").unwrap();
         let moves = game.generate_moves().all_from(Square::e1);
         assert_eq!(moves.len(), 5);
     }
 
-    #[test]////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    #[test]
     pub fn cant_move_king_into_rook_line_of_attack() {
-        let mut game = Game::new_from_fen("kr6/8/8/8/8/8/8/K7 w - - 0 25");
+        let mut game = Game::new_from_fen("kr6/8/8/8/8/8/8/K7 w - - 0 25").unwrap();
         game.generate_moves().print();
         let moves = game.generate_moves().all_from(Square::a1);
         assert_eq!(moves.len(), 1);
@@ -919,102 +941,102 @@ mod move_gen_tests {
 
     #[test]
     pub fn bishop_has_correct_number_of_legal_moves() {
-        let mut game = Game::new_from_fen("K6k/B7/8/8/8/8/8/8 w - - 0 25");
+        let mut game = Game::new_from_fen("K6k/B7/8/8/8/8/8/8 w - - 0 25").unwrap();
         let moves = game.generate_moves().all_from(Square::a7);
         assert_eq!(moves.len(), 7);
     }
 
     #[test]
     pub fn cant_move_blocking_piece_if_king_is_pinned() {
-        let mut game = Game::new_from_fen("K6k/B7/r7/8/8/8/8/8 w - - 0 25");
+        let mut game = Game::new_from_fen("K6k/B7/r7/8/8/8/8/8 w - - 0 25").unwrap();
         let moves = game.generate_moves().all_from(Square::a7);
         assert_eq!(moves.len(), 0);
     }
 
     #[test]
     pub fn cant_castle_if_in_check() {
-        let mut game = Game::new_from_fen("k7/8/8/4r3/8/8/8/4K2R w K - 0 25");
+        let mut game = Game::new_from_fen("k7/8/8/4r3/8/8/8/4K2R w K - 0 25").unwrap();
         let moves = game.generate_moves().all_from(Square::e1);
         assert_eq!(moves.into_iter().any(|m| m.is_castling()), false);
     }
 
     #[test]
     pub fn is_in_check_is_true_when_in_check_by_rook() {
-        let game = Game::new_from_fen("k7/8/8/8/4r3/8/8/4K3 w K - 0 25");
+        let game = Game::new_from_fen("k7/8/8/8/4r3/8/8/4K3 w K - 0 25").unwrap();
         assert_eq!(game.is_in_check(Color::White), true);
     }
 
     #[test]
     pub fn rooks_should_have_5_moves_here() {
-        let mut game = Game::new_from_fen("rnbqkbnr/pppppppp/8/8/8/8/8/RNBQKBNR w K - 0 25");
+        let mut game = Game::new_from_fen("rnbqkbnr/pppppppp/8/8/8/8/8/RNBQKBNR w K - 0 25").unwrap();
         assert_eq!(game.generate_moves().all_from(Square::h1).len(), 6);
         assert_eq!(game.generate_moves().all_from(Square::a1).len(), 6);
     }
 
     #[test]
     pub fn rook_should_have_a_capture_move() {
-        let mut game = Game::new_from_fen("rnbqkbnr/pppppppp/8/8/8/8/8/RNBQKBNR w K - 0 25");
+        let mut game = Game::new_from_fen("rnbqkbnr/pppppppp/8/8/8/8/8/RNBQKBNR w K - 0 25").unwrap();
         let moves = game.generate_moves().all_from(Square::a1);
         assert_eq!(moves.contains(&Move::new_friendly(Square::a1, Square::a7, Piece::WhiteRook, Piece::None, true, false, false, false)), true);
     }
 
     #[test]
     pub fn knight_should_have_a_capture_move() {
-        let mut game = Game::new_from_fen("rnbqkbnr/p1pppppp/8/8/8/1p6/8/N1BQKBNR w K - 0 25");
+        let mut game = Game::new_from_fen("rnbqkbnr/p1pppppp/8/8/8/1p6/8/N1BQKBNR w K - 0 25").unwrap();
         assert_eq!(game.generate_moves().all_from(Square::a1).contains(&Move::new_friendly(Square::a1, Square::b3, Piece::WhiteKnight, Piece::None, true, false, false, false)), true);
     }
 
     #[test]
     pub fn bishop_should_have_a_capture_move() {
-        let mut game = Game::new_from_fen("rnbqkbnr/p1pppppp/8/1p6/4P3/8/PPPP1PPP/RNBQKBNR w K - 0 25");
+        let mut game = Game::new_from_fen("rnbqkbnr/p1pppppp/8/1p6/4P3/8/PPPP1PPP/RNBQKBNR w K - 0 25").unwrap();
         assert_eq!(game.generate_moves().all_from(Square::f1).contains(&Move::new_friendly(Square::f1, Square::b5, Piece::WhiteBishop, Piece::None, true, false, false, false)), true);
     }
 
     #[test]
     pub fn rook_captured_by_pawn_generates_right_move() {
-        let mut game = Game::new_from_fen("1nbqkbnr/1ppppppp/8/8/r7/1P6/P1PPPPPP/RNBQKBNR w K - 0 25");
+        let mut game = Game::new_from_fen("1nbqkbnr/1ppppppp/8/8/r7/1P6/P1PPPPPP/RNBQKBNR w K - 0 25").unwrap();
         let moves = game.generate_moves().all_from(Square::b3);
         assert_eq!(moves.contains(&Move::new_friendly(Square::b3, Square::a4, Piece::WhitePawn, Piece::None, true, false, false, false)), true);
     }
 
     #[test]
     pub fn pawns_cant_capture_straight() {
-        let mut game = Game::new_from_fen("k7/8/8/p7/P7/8/8/K7 w K - 0 25");
+        let mut game = Game::new_from_fen("k7/8/8/p7/P7/8/8/K7 w K - 0 25").unwrap();
         let moves = game.generate_moves().all_from(Square::d8);
         assert_eq!(moves.contains(&Move::new_friendly(Square::a4, Square::a5, Piece::WhitePawn, Piece::None, true, false, false, false)), false);
     }
 
     #[test]
     pub fn pawns_cant_move_straight_into_piece() {
-        let mut game = Game::new_from_fen("k7/8/8/p7/P7/8/8/K7 w K - 0 25");
+        let mut game = Game::new_from_fen("k7/8/8/p7/P7/8/8/K7 w K - 0 25").unwrap();
         let moves = game.generate_moves().all_from(Square::a4);
         assert_eq!(moves.contains(&Move::new_friendly(Square::a4, Square::a5, Piece::WhitePawn, Piece::None, false, false, false, false)), false);
     }
 
     #[test]
     pub fn rook_should_not_have_illegal_moves() {
-        let mut game = Game::new_from_fen("r1bqkbnr/pppppppp/2n5/1P6/8/8/2PPPPPP/RNBQKBNR b KQkq - 0 25");
+        let mut game = Game::new_from_fen("r1bqkbnr/pppppppp/2n5/1P6/8/8/2PPPPPP/RNBQKBNR b KQkq - 0 25").unwrap();
         let moves = game.generate_moves().all_from(Square::a8);
         assert_eq!(moves.len(), 1);
     }
 
     #[test]
     pub fn cant_castle_if_path_is_under_attack() {
-        let mut game = Game::new_from_fen("rnbqkbn1/ppppppp1/8/8/8/4BNP1/PPPPPrP1/RNBQK2R w KQq - 0 8");
+        let mut game = Game::new_from_fen("rnbqkbn1/ppppppp1/8/8/8/4BNP1/PPPPPrP1/RNBQK2R w KQq - 0 8").unwrap();
         let moves = game.generate_moves().all_from(Square::e1);
         assert_eq!(moves.contains(&Move::new_friendly(Square::e1, Square::g1, Piece::WhiteKing, Piece::None, false, false, false, true)), false);
     }
 
     #[test]
     pub fn can_castle_when_its_open() {
-        let mut game = Game::new_from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 10");
+        let mut game = Game::new_from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 10").unwrap();
         let moves = game.generate_moves().all_from(Square::e1);
         assert_eq!(moves.contains(&Move::new_friendly(Square::e1, Square::g1, Piece::WhiteKing, Piece::None, false, false, false, true)), true);
     }
 
     #[test]
     pub fn cant_castle_when_a_paw_is_in_front_of_king() {
-        let mut game = Game::new_from_fen("r3k2r/4P3/8/8/8/8/8/4K3 b kq - 0 10");
+        let mut game = Game::new_from_fen("r3k2r/4P3/8/8/8/8/8/4K3 b kq - 0 10").unwrap();
         let moves = game.generate_moves().all_from(Square::e8);
         assert_eq!(moves.contains(&Move::new_friendly(Square::e8, Square::g8, Piece::WhiteKing, Piece::None, false, false, false, true)), false);
         assert_eq!(moves.contains(&Move::new_friendly(Square::e8, Square::c8, Piece::WhiteKing, Piece::None, false, false, false, true)), false);
@@ -1027,7 +1049,7 @@ mod make_tests {
 
     #[test]
     pub fn board_correct_after_move_with_rook() {
-        let mut game = Game::new_from_fen("k7/1R6/8/8/8/8/8/K7 w - - 0 25");
+        let mut game = Game::new_from_fen("k7/1R6/8/8/8/8/8/K7 w - - 0 25").unwrap();
         game.make_move(&Move::new_friendly(Square::b7, Square::e7, Piece::WhiteRook, Piece::None, false, false, false, false));
         assert_eq!(game.get_piece_bitboard(Piece::WhiteRook).get_bit_sq(Square::b7), false);
         assert_eq!(game.get_piece_bitboard(Piece::WhiteRook).get_bit_sq(Square::e7), true);
@@ -1037,7 +1059,7 @@ mod make_tests {
 
     #[test]
     pub fn board_correct_after_enpassant_capture() {
-        let mut game = Game::new_from_fen("k7/8/8/4Pp2/8/8/8/K7 w - f6 0 25");
+        let mut game = Game::new_from_fen("k7/8/8/4Pp2/8/8/8/K7 w - f6 0 25").unwrap();
         
         game.make_move(&Move::new_friendly(Square::e5, Square::f6, Piece::WhitePawn, Piece::None, false, false, true, false));
 
@@ -1079,21 +1101,21 @@ mod make_tests {
 
     #[test]
     pub fn resets_half_moves_on_pawn_move() {
-        let mut game = Game::new_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 8 1");
+        let mut game = Game::new_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 8 1").unwrap();
         game.make_move(&Move::new_friendly(Square::d2, Square::d3, Piece::WhitePawn, Piece::None, false, false, false, false));
         assert!(game.half_moves == 0);
     }
 
     #[test]
     pub fn resets_half_moves_on_capture() {
-        let mut game = Game::new_from_fen("rnbqkbnr/p1pppppp/8/1p6/8/4P3/PPPP1PPP/RNBQKBNR w KQkq - 8 1");
+        let mut game = Game::new_from_fen("rnbqkbnr/p1pppppp/8/1p6/8/4P3/PPPP1PPP/RNBQKBNR w KQkq - 8 1").unwrap();
         game.make_move(&Move::new_friendly(Square::f1, Square::b5, Piece::WhiteBishop, Piece::None, true, false, false, false));
         assert!(game.half_moves == 0);
     }
 
     #[test]
     pub fn increments_half_moves_on_quiet_move() {
-        let mut game = Game::new_from_fen("rnbqkbnr/p1pppppp/8/1p6/8/4P3/PPPP1PPP/RNBQKBNR w KQkq - 8 1");
+        let mut game = Game::new_from_fen("rnbqkbnr/p1pppppp/8/1p6/8/4P3/PPPP1PPP/RNBQKBNR w KQkq - 8 1").unwrap();
         game.make_move(&Move::new_friendly(Square::f1, Square::c4, Piece::WhiteBishop, Piece::None, false, false, false, false));
         assert!(game.half_moves == 9);
     }
@@ -1107,7 +1129,7 @@ mod make_tests {
 
     #[test]
     pub fn enpassant_capture_kills_the_other_pawn() {
-        let mut game = Game::new_from_fen("rnbqkbnr/p1pppppp/8/Pp6/8/8/1PPPPPPP/RNBQKBNR w KQkq b6 0 2");
+        let mut game = Game::new_from_fen("rnbqkbnr/p1pppppp/8/Pp6/8/8/1PPPPPPP/RNBQKBNR w KQkq b6 0 2").unwrap();
         game.make_move(&Move::new_friendly(Square::a5, Square::b6, Piece::WhitePawn, Piece::None, false, false, true, false));
         assert_eq!(game.get_piece_bitboard(Piece::BlackPawn).get_bit_sq(Square::b5), false);
         assert_eq!(game.black_occupancies.get_bit_sq(Square::b5), false);
@@ -1116,7 +1138,7 @@ mod make_tests {
 
     #[test]
     pub fn rooks_correctly_kingside() {
-        let mut game = Game::new_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 3 7");
+        let mut game = Game::new_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 3 7").unwrap();
         game.make_move(&Move::new_friendly(Square::e1, Square::g1, Piece::WhiteKing, Piece::None, false, false, false, true));
         assert_eq!(game.get_piece_bitboard(Piece::WhiteRook).get_bit_sq(Square::e1), false);
         assert_eq!(game.get_piece_bitboard(Piece::WhiteKing).get_bit_sq(Square::h1), false);
@@ -1136,7 +1158,7 @@ mod make_tests {
 
     #[test]
     pub fn rooks_correctly_queenside() {
-        let mut game = Game::new_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 3 7");
+        let mut game = Game::new_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 3 7").unwrap();
         game.make_move(&Move::new_friendly(Square::e1, Square::c1, Piece::WhiteKing, Piece::None, false, false, false, true));
         assert_eq!(game.get_piece_bitboard(Piece::WhiteRook).get_bit_sq(Square::e1), false);
         assert_eq!(game.get_piece_bitboard(Piece::WhiteKing).get_bit_sq(Square::a1), false);
@@ -1156,7 +1178,7 @@ mod make_tests {
 
     #[test]
     pub fn cant_castle_after_castling() {
-        let mut game = Game::new_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQK2R w KQkq - 3 7");
+        let mut game = Game::new_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQK2R w KQkq - 3 7").unwrap();
         game.make_move(&Move::new_friendly(Square::e1, Square::g1, Piece::WhiteKing, Piece::None, false, false, false, true));
         assert!(game.castling_ability & CastlingAbility::WhiteKingSide as u8 == 0);
         assert!(game.castling_ability & CastlingAbility::WhiteQueenSide as u8 == 0);
@@ -1164,7 +1186,7 @@ mod make_tests {
 
     #[test]
     pub fn moving_rook_disables_castling_for_that_side() {
-        let mut game = Game::new_from_fen("4k3/8/8/8/8/8/8/R3K2R w KQkq - 0 2");
+        let mut game = Game::new_from_fen("4k3/8/8/8/8/8/8/R3K2R w KQkq - 0 2").unwrap();
         game.make_move(&Move::new_friendly(Square::h1, Square::h2, Piece::WhiteRook, Piece::None, false, false, false, false));
         assert!(game.castling_ability & CastlingAbility::WhiteKingSide as u8 == 0);
         assert!(game.castling_ability & CastlingAbility::WhiteQueenSide as u8 != 0);
@@ -1172,7 +1194,7 @@ mod make_tests {
 
     #[test]
     pub fn capturing_rook_disables_castling_for_that_side() {
-        let mut game = Game::new_from_fen("4k3/8/8/8/8/1n6/8/R3K2R b QK - 0 2");
+        let mut game = Game::new_from_fen("4k3/8/8/8/8/1n6/8/R3K2R b QK - 0 2").unwrap();
         game.make_move(&Move::new_friendly(Square::b3, Square::a1, Piece::BlackKnight, Piece::None, true, false, false, false));
         assert!(game.castling_ability & CastlingAbility::WhiteKingSide as u8 != 0);
         assert!(game.castling_ability & CastlingAbility::WhiteQueenSide as u8 == 0);
@@ -1180,7 +1202,7 @@ mod make_tests {
 
     #[test]
     pub fn white_pawn_promotes_correctly_on_quietly_reaching_back_row() {
-        let mut game = Game::new_from_fen("2n5/1P6/8/8/8/8/8/K6k w - - 0 2");
+        let mut game = Game::new_from_fen("2n5/1P6/8/8/8/8/8/K6k w - - 0 2").unwrap();
         game.make_move(&Move::new_friendly(Square::b7, Square::b8, Piece::WhitePawn, Piece::WhiteQueen, false, false, false, false));
         assert_eq!(game.get_piece_bitboard(Piece::WhiteQueen).get_bit_sq(Square::b8), true);
         assert_eq!(game.white_occupancies.get_bit_sq(Square::b8), true);
@@ -1189,7 +1211,7 @@ mod make_tests {
 
     #[test]
     pub fn black_pawn_promotes_correctly_on_quietly_reaching_back_row() {
-        let mut game = Game::new_from_fen("K6k/8/8/8/8/8/3p4/8 b - - 0 2");
+        let mut game = Game::new_from_fen("K6k/8/8/8/8/8/3p4/8 b - - 0 2").unwrap();
         game.make_move(&Move::new_friendly(Square::d2, Square::d1, Piece::BlackPawn, Piece::BlackRook, false, false, false, false));
         assert_eq!(game.get_piece_bitboard(Piece::BlackRook).get_bit_sq(Square::d1), true);
         assert_eq!(game.black_occupancies.get_bit_sq(Square::d1), true);
@@ -1197,7 +1219,7 @@ mod make_tests {
 
     #[test]
     pub fn pawn_promotes_correctly_on_back_row_capture() {
-        let mut game = Game::new_from_fen("2n5/1P6/8/8/8/8/8/K6k w QK - 0 2");
+        let mut game = Game::new_from_fen("2n5/1P6/8/8/8/8/8/K6k w QK - 0 2").unwrap();
         game.make_move(&Move::new_friendly(Square::b7, Square::c8, Piece::WhitePawn, Piece::WhiteBishop, false, false, false, false));
         assert_eq!(game.get_piece_bitboard(Piece::WhiteBishop).get_bit_sq(Square::c8), true);
         assert_eq!(game.white_occupancies.get_bit_sq(Square::c8), true);
@@ -1205,7 +1227,7 @@ mod make_tests {
 
     #[test]
     pub fn moving_the_king_disables_castling() {
-        let mut game = Game::new_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 3 7");
+        let mut game = Game::new_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 3 7").unwrap();
         game.make_move(&Move::new_friendly(Square::e1, Square::f1, Piece::WhiteKing, Piece::None, false, false, false, false));
         assert!(game.castling_ability & CastlingAbility::WhiteKingSide as u8 == 0);
         assert!(game.castling_ability & CastlingAbility::WhiteQueenSide as u8 == 0);
@@ -1213,7 +1235,7 @@ mod make_tests {
 
     #[test]
     pub fn capturing_bishop_results_in_correct_bitboards() {
-        let mut game = Game::new_from_fen("rnbqkbnr/1ppppppp/p6B/8/8/3P4/PPP1PPPP/RN1QKBNR b KQkq - 0 1");
+        let mut game = Game::new_from_fen("rnbqkbnr/1ppppppp/p6B/8/8/3P4/PPP1PPPP/RN1QKBNR b KQkq - 0 1").unwrap();
         game.make_move(&Move::new_friendly(Square::g8, Square::h6, Piece::BlackPawn, Piece::None, true, false, false, false));
         
         assert_eq!(game.get_piece_bitboard(Piece::WhiteBishop).get_bit_sq(Square::h6), false);
