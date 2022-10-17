@@ -15,16 +15,10 @@ use attack_tables::*;
 use move_list::*;
 
 fn main() {
-    println!("{}", get_queen_attack_table(Square::e6 as u8, Bitboard::new()).to_u64());
-    println!("{}", get_rook_attack_table(Square::e6 as u8, Bitboard::new()).to_u64());
-    println!("{}", get_bishop_attack_table(Square::e6 as u8, Bitboard::new()).to_u64());
+    let mut game = Game::new_from_fen("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10 ");
     
-    //let game = Game::new_from_fen("8/8/8/pP6/8/8/8/8 w - a6 0 1");
-    let game = Game::new_from_start_pos();
-
     game.pretty_print();
+    let res = game.TEMP_PERFT(5, true);
 
-    /*let moves = game.generate_moves();
-
-    moves.print()*/
+    println!("{res}");
 }

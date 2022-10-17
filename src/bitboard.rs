@@ -1,4 +1,4 @@
-use bitintr::Pext;
+use bitintr::{Pext, Blsr};
 
 use crate::*;
 
@@ -103,11 +103,15 @@ impl Bitboard {
         self.bits == 0
     }
 
+    pub fn least_significant(&self) -> u8 {
+        self.bits.trailing_zeros() as u8
+    }
+
     ///Extract the least significant 1-bit. Modifies the bitboard and returns the position of the extracted bit
     pub fn extract_bit(&mut self) -> u8 {
         let last1 = self.bits.trailing_zeros();
 
-        self.bits ^= 1 << last1;
+        self.bits = self.bits.blsr();
 
         last1 as u8
     }
@@ -123,4 +127,8 @@ impl Bitboard {
     pub fn xor(&self, other: Bitboard) -> Self {
         Self { bits: self.bits ^ other.bits }
     }
+}
+
+pub fn not(bitboard: Bitboard) -> Bitboard {
+    Bitboard { bits: !bitboard.bits }
 }
