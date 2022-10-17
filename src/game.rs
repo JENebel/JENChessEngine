@@ -685,12 +685,10 @@ impl Game {
             //Peek unmake
     }
 
-    pub fn TEMP_PERFT(&mut self, depth: u8, print: bool) -> u128 {
+    #[inline(always)]
+    pub fn perft(&mut self, depth: u8, print: bool) -> u128 {
         let moves = self.generate_moves();
 
-        /*if depth == 0 {
-            return 1;
-        }*/
         if depth == 1 {
             return moves.len() as u128;
         }
@@ -702,7 +700,7 @@ impl Game {
             let mut copy = self.clone();
 
             copy.make_move(moves.get(m));
-            let r = copy.TEMP_PERFT(depth - 1, false);
+            let r = copy.perft(depth - 1, false);
 
             if print {
                 println!("{}{}: {}", SQUARE_STRINGS[moves.get(m).from_square() as usize], SQUARE_STRINGS[moves.get(m).to_square() as usize], r)
@@ -743,10 +741,6 @@ pub fn char_to_piece(char: char) -> Piece {
         _ => panic!("Illegal piece char: {}", char)
     }
 }
-
-
-
-
 
 #[cfg(test)]
 mod move_gen_tests {
