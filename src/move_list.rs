@@ -30,11 +30,19 @@ impl MoveList {
         self.count
     }
 
+    #[cfg(test)]
+    #[allow(dead_code)]
     pub fn get(&self, index: usize) -> &Move {
         match &self.moves[index] {
             Some(m) => &m,
             None => unreachable!(),
         }
+    }
+
+    pub fn values(&self) -> Vec<Move> {
+        let res: Vec<Move> = self.moves.iter().take(self.count).map(|m| m.unwrap()).collect();
+
+        res
     }
 
     #[cfg(test)]

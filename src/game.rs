@@ -1,4 +1,5 @@
 use super::*;
+use rayon::prelude::*;
 
 #[derive(Clone, Copy)]
 pub struct Game {
@@ -621,19 +622,78 @@ impl Game {
     }
 
     fn add_move_if_legal(&mut self, move_list: &mut MoveList, cmove: Move) {
-        //Iffy implementation rn. Revisit
-        let mut copy = self.clone();
-        copy.make_move(&cmove);
+        let from_sq = cmove.from_square();
+        let to_sq = cmove.to_square();
+        let capture = cmove.is_capture();
+        let piece_ind = cmove.piece() as usize;
 
-        if !copy.is_in_check(self.active_player) {
+        //Peek make
+        //Update all_occupancies
+        self.all_occupancies.unset_bit(from_sq);
+        self.bitboards[piece_ind].unset_bit(from_sq);
+        self.bitboards[piece_ind].set_bit(to_sq);
+        self.all_occupancies.set_bit(to_sq);
+        let mut taken = 0;
+        //Unset captured
+        if capture {
+            let start;
+            let end;
+            if self.active_player == Color::White {
+                start = Piece::BlackPawn as usize;
+                end = Piece::BlackKing as usize;
+            }
+            else {
+                start = Piece::WhitePawn as usize;
+                end = Piece::WhiteKing as usize;
+            }
+
+            for bb in start..end {
+                if self.bitboards[bb].get_bit(to_sq) {
+                    self.bitboards[bb].unset_bit(to_sq);
+                    taken = bb;
+                    break;
+                }
+            }
+        }
+        else if cmove.is_enpassant() {
+            if self.active_player == Color::White {
+                self.bitboards[Piece::BlackPawn as usize].unset_bit(to_sq + 8);
+                self.all_occupancies.unset_bit(to_sq + 8);
+            }
+            else {
+                self.bitboards[Piece::WhitePawn as usize].unset_bit(to_sq - 8);
+                self.all_occupancies.unset_bit(to_sq - 8);
+            }
+        }
+
+        //Add if not in check
+        if !self.is_in_check(self.active_player) {
             move_list.add_move(cmove)
         }
 
-        //Maybe faster?:
-            //self.bitboards[cmove.piece() as usize].unset_bit(cmove.from_square())
-            //Peek make
-            //add if not results in check
-            //Peek unmake
+        //Peek unmake
+        //Reset occupancies
+        self.all_occupancies.set_bit(from_sq);
+        self.bitboards[piece_ind].set_bit(from_sq);
+        self.bitboards[piece_ind].unset_bit(to_sq);
+        //Unset captured
+        if capture {
+            self.bitboards[taken].set_bit(to_sq);
+        }
+        else if cmove.is_enpassant() {
+            if self.active_player == Color::White {
+                self.bitboards[Piece::BlackPawn as usize].set_bit(to_sq + 8);
+                self.all_occupancies.set_bit(to_sq + 8);
+            }
+            else {
+                self.bitboards[Piece::WhitePawn as usize].set_bit(to_sq - 8);
+                self.all_occupancies.set_bit(to_sq - 8);
+            }
+            self.all_occupancies.unset_bit(to_sq);
+        }
+        else {
+            self.all_occupancies.unset_bit(to_sq);
+        }
     }
 
     pub fn perft(&mut self, depth: u8, print: bool) -> u128 {
@@ -642,24 +702,19 @@ impl Game {
         if depth == 1 {
             return moves.len() as u128;
         }
-        
-        let mut result = 0;
 
-        for m in 0..moves.len() {
-            
+        moves.values().par_iter().map(|m| {
             let mut copy = self.clone();
 
-            copy.make_move(moves.get(m));
+            copy.make_move(m);
             let r = copy.perft(depth - 1, false);
 
             if print {
-                println!("{}{}: {}", SQUARE_STRINGS[moves.get(m).from_square() as usize], SQUARE_STRINGS[moves.get(m).to_square() as usize], r)
+                println!("{}{}: {}", SQUARE_STRINGS[m.from_square() as usize], SQUARE_STRINGS[m.to_square() as usize], r)
             }
 
-            result += r;
-        }
-
-        result
+            r
+        }).sum()
     }
 }
 
@@ -854,9 +909,10 @@ mod move_gen_tests {
         assert_eq!(moves.len(), 5);
     }
 
-    #[test]
+    #[test]////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     pub fn cant_move_king_into_rook_line_of_attack() {
         let mut game = Game::new_from_fen("kr6/8/8/8/8/8/8/K7 w - - 0 25");
+        game.generate_moves().print();
         let moves = game.generate_moves().all_from(Square::a1);
         assert_eq!(moves.len(), 1);
     }

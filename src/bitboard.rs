@@ -88,7 +88,7 @@ impl Bitboard {
         Self { bits: self.bits ^ other.bits }
     }*/
 }
-
+#[inline(always)]
 pub fn not(bitboard: Bitboard) -> Bitboard {
     Bitboard { bits: !bitboard.bits }
 }
