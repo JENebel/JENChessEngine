@@ -738,6 +738,122 @@ impl Game {
         let rand = rand::thread_rng().gen_range(0..moves.len());
         moves.get(rand).clone()
     }
+
+    pub fn evaluate(&self) -> i32 {
+        let mut score: i32 = 0;
+
+        for bb in 0..12 {
+            let mut board = self.bitboards[bb];
+            while !board.is_empty() {
+                let square = board.extract_bit();
+                score += MATERIAL_WEIGHTS[bb];
+
+                match bb {
+                    0  => score += PAWN_SCORES[square as usize],
+                    1  => score += ROOK_SCORES[square as usize],
+                    2  => score += KNIGHT_SCORES[square as usize],
+                    3  => score += BISHOP_SCORES[square as usize],
+                    4  =>  { } //No queen values,
+                    5  => score += KING_SCORES[MIRRORED[square as usize]],
+                    6  => score += PAWN_SCORES[MIRRORED[square as usize]],
+                    7  => score += ROOK_SCORES[MIRRORED[square as usize]],
+                    8  => score += KNIGHT_SCORES[MIRRORED[square as usize]],
+                    9  => score += BISHOP_SCORES[MIRRORED[square as usize]],
+                    10 => { } //No queen values,
+                    11 => score += KING_SCORES[MIRRORED[square as usize]],
+                    _ => unreachable!()
+                }
+            }
+        }
+
+        if self.active_player == Color::White { score } else { -score }
+    }
+
+    pub fn alphabeta_search(&mut self, depth: u8) -> Move {
+        let result = self.rec_alphabeta(depth, -100000, 100000, true);
+
+        Move::new_from_u32(result as u32)
+    }
+
+    /*pub fn async_alphabeta_search(&mut self, depth: u8) -> Move {
+        let moves = self.generate_moves().values();
+
+        let intermediary: Vec<(Move, i32)> = moves.par_iter().map(|m| {
+            let mut copy = self.clone();
+            copy.make_move(m);
+            let score = -copy.rec_alphabeta(depth - 1, -100000, 100000);
+            (*m, score)
+        }).collect();
+
+        let result = intermediary.iter().reduce(|best, m| {
+            if m.1 > best.1 { m } else { best }
+        }).unwrap();
+
+        result.0
+    }*/
+
+    fn rec_alphabeta(&mut self, depth: u8, alpha: i32, beta: i32, root: bool) -> i32 {
+        if depth == 0 {
+            return self.evaluate();
+        }
+
+        let moves = self.generate_moves();
+
+        //Mate & Draw
+        if moves.len() == 0 {
+            if self.is_in_check(self.active_player) {
+                return -99000 - depth as i32;
+            }
+            else {
+                return 0;
+            }
+        }
+
+        let mut new_alpha = alpha;
+        let mut best_so_far = moves.get(0);
+
+        for i in 0..moves.len() {
+            let mut copy = self.clone();
+            let m = moves.get(i);
+            copy.make_move(m);
+
+            let score = -copy.rec_alphabeta(depth - 1, -beta, -new_alpha, false);
+            
+            //Fail hard/hard
+            if score > beta || score == beta && rand::thread_rng().gen_range(0..2) == 0 {
+                return beta;
+            }
+
+            //Found better
+            if score > new_alpha {
+                new_alpha = score;
+
+                best_so_far = m;
+            }
+        }
+
+        if !root {
+            //Fail low
+            new_alpha
+        }
+        else {
+            //return move
+            best_so_far.to_u32() as i32
+        }
+    }
+}
+
+#[cfg(test)]
+mod search_tests {
+    use super::*;
+
+    #[test]
+    pub fn lolololol() {
+        let mut game = Game::new_from_start_pos();
+        let res = game.alphabeta_search(6);
+
+        println!("{}", res.to_uci())
+    }
 }
 
 #[cfg(test)]

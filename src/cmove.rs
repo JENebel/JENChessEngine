@@ -30,6 +30,10 @@ impl Move {
         Self { data: data }
     }
 
+    pub fn new_from_u32(data: u32) -> Self{
+        Self { data: data }
+    }
+
     #[cfg(test)]
     pub fn new_friendly(from_square: Square,        // 0x3f
                         to_square: Square,          // 0xfc0
@@ -82,6 +86,10 @@ impl Move {
             result += PIECE_STRINGS[self.promotion() as usize].to_lowercase().as_str()
         }
         result
+    }
+
+    pub fn to_u32(&self) -> u32 {
+        self.data
     }
 
     #[cfg(test)]

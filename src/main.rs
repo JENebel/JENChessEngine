@@ -5,7 +5,8 @@ mod cmove;
 mod move_list;
 mod utilities;
 
-use std::{io::{self, BufRead, Write}, process, time::SystemTime, fs::{self, File}, path::Path, fmt::format};
+use core::panic;
+use std::{io::{self, BufRead, Write}, process, time::SystemTime, fs::{self, File}, path::Path};
 
 use game::*;
 
@@ -15,9 +16,10 @@ use attack_tables::*;
 use move_list::*;
 use utilities::*;
 
-const LOG: bool = true;
+const LOG: bool = false;
 
 fn main() {
+
     if LOG {
         let dest_path = Path::new("./io_log.txt");
         File::create(&dest_path).expect("Couldn't clear consts.rs");
@@ -28,7 +30,7 @@ fn main() {
         let stdin = io::stdin();
         for line in stdin.lock().lines() {
             let input = line.unwrap().trim().to_string();
-            log(format!("GUI: {}", input));
+            if LOG { output(format!("GUI: {}", input)) }
             if input != "" {
                 let mut split = input.split(" ").peekable();
                 match split.next().unwrap().to_ascii_lowercase().as_str() {
@@ -91,29 +93,38 @@ fn main() {
                         }
                     },
                     "uci" => {
-                        log("name JENCE".to_string());
-                        log("author Joachim Enggård Nebel".to_string());
-                        log("uciok".to_string());
+                        output("id name JENCE".to_string());
+                        output("id author Joachim Enggård Nebel".to_string());
+                        output("uciok".to_string());
                     },
                     "ucinewgame" => { },
-                    "isready" => log("readyok".to_string()),
+                    "isready" => output("readyok".to_string()),
                     "go" => {
                         if split.peek().is_none() { break; }
                         let com = split.next().unwrap();
-                        let bestmove = game.search_random();
-                        log(format!("bestmove {}", bestmove.to_uci()));
+                        let bestmove;
                         match com {
                             "depth" => {
-                                //if split.peek().is_none() { break; }
-                                //let depth_str = split.next().unwrap();
-                                //let depth = depth_str.parse::<u16>();
-                                //if depth.is_err() { break; }
+                                if split.peek().is_none() { break; }
+                                let depth_str = split.next().unwrap();
+                                let depth = depth_str.parse::<u16>();
+                                if depth.is_err() { break; }
+                                bestmove = game.alphabeta_search(depth.unwrap() as u8);
                             },
-                            _ => {}
+                            "random" => {
+                                bestmove = game.search_random();
+                            },
+                            _ => bestmove = game.alphabeta_search(6)
                         }
+
+                        output(format!("bestmove {}", bestmove.to_uci()));
+                    },
+                    "eval" => {
+                        let result = game.evaluate();
+                        println!(" {}", result);
                     },
 
-                    _ => {}
+                    _ => println!(" {}", " Unknown command")
                 }
             }
         }
@@ -263,7 +274,7 @@ fn print_help() {
     println!("  {}", "eval                                  - Evaluates the current position, and shows the result");
 }
 
-fn log(output: String) {
+fn output(output: String) {
     println!("{}\n", output);
     if LOG {
         let mut file = fs::OpenOptions::new()

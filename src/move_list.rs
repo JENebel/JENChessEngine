@@ -33,7 +33,7 @@ impl MoveList {
     pub fn get(&self, index: usize) -> &Move {
         match &self.moves[index] {
             Some(m) => &m,
-            None => unreachable!(),
+            None => unreachable!("Index: {} was out of bounds. Length is only: {}", index, self.len()),
         }
     }
 
