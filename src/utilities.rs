@@ -1,3 +1,5 @@
+use crate::cmove::Move;
+
 
 pub fn opposite_color(color: Color) -> Color {
     if color == Color::White { Color::Black } else { Color::White }
@@ -63,8 +65,6 @@ pub enum Piece {
 
 pub const PIECE_STRINGS: [&str; 13] = ["P", "R", "N", "B", "Q", "K", "p", "r", "n", "b", "q", "k", "None"];
 
-pub const MATERIAL_WEIGHTS: [i32; 12] = [100, 500, 300, 350, 1000, 10000, -100, -500, -300, -350, -1000, -10000];
-
 pub const CASTLING_RIGHTS: [u8; 64] = [
     7, 15, 15, 15,  3, 15, 15, 11,
    15, 15, 15, 15, 15, 15, 15, 15,
@@ -115,6 +115,8 @@ pub const SQUARES: [Square; 65] = [
     Square::a1,  Square::b1,  Square::c1,  Square::d1,  Square::e1,  Square::f1,  Square::g1,  Square::h1, 
     Square::None
 ];
+
+pub const MATERIAL_WEIGHTS: [i32; 12] = [100, 500, 300, 350, 1000, 10000, -100, -500, -300, -350, -1000, -10000];
 
 // pawn positional score
 pub const PAWN_SCORES: [i32; 64] = 
@@ -195,3 +197,18 @@ pub const MIRRORED: [usize; 64] =
 	8,  9,  10, 11, 12, 13, 14, 15,
 	0,  1,  2,  3,  4,  5,  6,  7
 ];
+
+pub struct SearchResult {
+    pub best_move: Move,
+    pub nodes_visited: u32,
+}
+
+impl SearchResult {
+    pub fn new_blank() -> Self {
+        Self { best_move: Move::new_from_u32(0), nodes_visited: 0 }
+    }
+
+    pub fn new(cmove: Move, nodes: u32) -> Self {
+        Self { best_move: cmove, nodes_visited: nodes }
+    }
+}

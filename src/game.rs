@@ -755,12 +755,13 @@ impl Game {
                     3  => score += BISHOP_SCORES[square as usize],
                     4  =>  { } //No queen values,
                     5  => score += KING_SCORES[MIRRORED[square as usize]],
-                    6  => score += PAWN_SCORES[MIRRORED[square as usize]],
-                    7  => score += ROOK_SCORES[MIRRORED[square as usize]],
-                    8  => score += KNIGHT_SCORES[MIRRORED[square as usize]],
-                    9  => score += BISHOP_SCORES[MIRRORED[square as usize]],
+
+                    6  => score -= PAWN_SCORES[MIRRORED[square as usize]],
+                    7  => score -= ROOK_SCORES[MIRRORED[square as usize]],
+                    8  => score -= KNIGHT_SCORES[MIRRORED[square as usize]],
+                    9  => score -= BISHOP_SCORES[MIRRORED[square as usize]],
                     10 => { } //No queen values,
-                    11 => score += KING_SCORES[MIRRORED[square as usize]],
+                    11 => score -= KING_SCORES[MIRRORED[square as usize]],
                     _ => unreachable!()
                 }
             }
@@ -769,32 +770,18 @@ impl Game {
         if self.active_player == Color::White { score } else { -score }
     }
 
-    pub fn alphabeta_search(&mut self, depth: u8) -> Move {
+    ///Returns the best move and the number of nodes visited
+    pub fn alphabeta_search(&mut self, depth: u8) -> SearchResult {
         let result = self.rec_alphabeta(depth, -100000, 100000, true);
 
-        Move::new_from_u32(result as u32)
+        SearchResult::new(Move::new_from_u32(result.0 as u32), result.1)
     }
+    
+    fn rec_alphabeta(&mut self, depth: u8, alpha: i32, beta: i32, root: bool) -> (i32, u32) {
+        let mut nodes = 1;
 
-    /*pub fn async_alphabeta_search(&mut self, depth: u8) -> Move {
-        let moves = self.generate_moves().values();
-
-        let intermediary: Vec<(Move, i32)> = moves.par_iter().map(|m| {
-            let mut copy = self.clone();
-            copy.make_move(m);
-            let score = -copy.rec_alphabeta(depth - 1, -100000, 100000);
-            (*m, score)
-        }).collect();
-
-        let result = intermediary.iter().reduce(|best, m| {
-            if m.1 > best.1 { m } else { best }
-        }).unwrap();
-
-        result.0
-    }*/
-
-    fn rec_alphabeta(&mut self, depth: u8, alpha: i32, beta: i32, root: bool) -> i32 {
         if depth == 0 {
-            return self.evaluate();
+            return self.quiescence(alpha, beta, 0)
         }
 
         let moves = self.generate_moves();
@@ -802,10 +789,10 @@ impl Game {
         //Mate & Draw
         if moves.len() == 0 {
             if self.is_in_check(self.active_player) {
-                return -99000 - depth as i32;
+                return (-99000 - depth as i32, nodes);
             }
             else {
-                return 0;
+                return (0, 1);
             }
         }
 
@@ -817,11 +804,13 @@ impl Game {
             let m = moves.get(i);
             copy.make_move(m);
 
-            let score = -copy.rec_alphabeta(depth - 1, -beta, -new_alpha, false);
+            let result = copy.rec_alphabeta(depth - 1, -beta, -new_alpha, false);
+            let score = -result.0;
+            nodes += result.1;
             
             //Fail hard/hard
-            if score > beta || score == beta && rand::thread_rng().gen_range(0..2) == 0 {
-                return beta;
+            if score >= beta {
+                return (beta, nodes);
             }
 
             //Found better
@@ -834,12 +823,72 @@ impl Game {
 
         if !root {
             //Fail low
-            new_alpha
+            (new_alpha, nodes)
         }
         else {
             //return move
-            best_so_far.to_u32() as i32
+            (best_so_far.to_u32() as i32, nodes)
         }
+    }
+
+    fn quiescence (&mut self, alpha: i32, beta: i32, ply: u8) -> (i32, u32) {
+        let mut nodes = 1;
+        let mut new_alpha = alpha;
+        let eval = self.evaluate();
+
+        //Fail hard/hard
+        if eval >= beta {
+            return (beta, nodes);
+        }
+
+        //Found better
+        if eval > new_alpha {
+            new_alpha = eval;
+        }
+
+        let moves = self.generate_moves();
+
+        //Mate & Draw
+        if moves.len() == 0 {
+            if self.is_in_check(self.active_player) {
+                return (-99000 + ply as i32, nodes);
+            }
+            else {
+                return (0, 1);
+            }
+        }
+
+        let mut captures = 0;
+
+        for i in 0..moves.len() {
+            let m = moves.get(i);
+            if m.is_capture() {
+                let mut copy = self.clone();
+                
+                copy.make_move(m);
+
+                let result = copy.quiescence(-beta, -new_alpha, ply + 1);
+                let score = -result.0;
+                nodes += result.1;
+                captures += 0;
+                
+                //Fail hard/hard
+                if score >= beta {
+                    return (beta, nodes);
+                }
+
+                //Found better
+                if score > new_alpha {
+                    new_alpha = score;
+                }
+            }
+        }
+
+        if captures == 0 {
+            return (eval, nodes);
+        }
+
+        (new_alpha, nodes)
     }
 }
 
@@ -849,10 +898,10 @@ mod search_tests {
 
     #[test]
     pub fn lolololol() {
-        let mut game = Game::new_from_start_pos();
-        let res = game.alphabeta_search(6);
+        let mut game = Game::new_from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 10").unwrap();
+        let res = game.alphabeta_search(5);
 
-        println!("{}", res.to_uci())
+        println!("{}", res.nodes_visited)
     }
 }
 
@@ -860,7 +909,7 @@ mod search_tests {
 mod move_gen_tests {
     use super::*;
 
-//Legal moves
+    //Legal moves
     #[test]
     pub fn white_pawn_can_move_one_tile_forward() {
         let mut game = Game::new_from_start_pos();

@@ -102,19 +102,19 @@ fn main() {
                     "go" => {
                         if split.peek().is_none() { break; }
                         let com = split.next().unwrap();
-                        let bestmove;
+                        let bestmove: Move;
                         match com {
                             "depth" => {
                                 if split.peek().is_none() { break; }
                                 let depth_str = split.next().unwrap();
                                 let depth = depth_str.parse::<u16>();
                                 if depth.is_err() { break; }
-                                bestmove = game.alphabeta_search(depth.unwrap() as u8);
+                                bestmove = game.alphabeta_search(depth.unwrap() as u8).best_move;
                             },
                             "random" => {
                                 bestmove = game.search_random();
                             },
-                            _ => bestmove = game.alphabeta_search(6)
+                            _ => bestmove = game.alphabeta_search(7).best_move
                         }
 
                         output(format!("bestmove {}", bestmove.to_uci()));
@@ -123,6 +123,9 @@ fn main() {
                         let result = game.evaluate();
                         println!(" {}", result);
                     },
+                    "sbench" => {
+                        sbench()
+                    },
 
                     _ => println!(" {}", " Unknown command")
                 }
@@ -130,6 +133,15 @@ fn main() {
         }
         println!(" {}", " Unknown command")
     }
+}
+
+fn sbench() {
+    let mut game = Game::new_from_start_pos();
+    let start = SystemTime::now();
+    let depth = 7;
+    let result = game.alphabeta_search(depth);
+    let duration = start.elapsed().unwrap();
+    println!(" Found best move: {} for depth {}. Visited: {} nodes in {}ms", result.best_move.to_uci(), depth, result.nodes_visited, duration.as_millis());
 }
 
 fn perft(depth: u8, mut game: Game, detail: bool) {
