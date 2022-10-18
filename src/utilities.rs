@@ -198,17 +198,32 @@ pub const MIRRORED: [usize; 64] =
 	0,  1,  2,  3,  4,  5,  6,  7
 ];
 
+///attacker*6 + defender
+const MVV_LVA: [i32; 144] = [
+    105, 205, 305, 405, 505, 605,  105, 205, 305, 405, 505, 605,
+    104, 204, 304, 404, 504, 604,  104, 204, 304, 404, 504, 604,
+    103, 203, 303, 403, 503, 603,  103, 203, 303, 403, 503, 603,
+    102, 202, 302, 402, 502, 602,  102, 202, 302, 402, 502, 602,
+    101, 201, 301, 401, 501, 601,  101, 201, 301, 401, 501, 601,
+    100, 200, 300, 400, 500, 600,  100, 200, 300, 400, 500, 600,
+
+    105, 205, 305, 405, 505, 605,  105, 205, 305, 405, 505, 605,
+    104, 204, 304, 404, 504, 604,  104, 204, 304, 404, 504, 604,
+    103, 203, 303, 403, 503, 603,  103, 203, 303, 403, 503, 603,
+    102, 202, 302, 402, 502, 602,  102, 202, 302, 402, 502, 602,
+    101, 201, 301, 401, 501, 601,  101, 201, 301, 401, 501, 601,
+    100, 200, 300, 400, 500, 600,  100, 200, 300, 400, 500, 600
+];
+
 pub struct SearchResult {
     pub best_move: Move,
     pub nodes_visited: u32,
+    pub score: i32,
+    pub depth: u8
 }
 
 impl SearchResult {
-    pub fn new_blank() -> Self {
-        Self { best_move: Move::new_from_u32(0), nodes_visited: 0 }
-    }
-
-    pub fn new(cmove: Move, nodes: u32) -> Self {
-        Self { best_move: cmove, nodes_visited: nodes }
+    pub fn new(cmove: Move, nodes: u32, score: i32, depth: u8) -> Self {
+        Self { best_move: cmove, nodes_visited: nodes, score: score, depth: depth }
     }
 }

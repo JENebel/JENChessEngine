@@ -1,3 +1,5 @@
+use std::cmp::max;
+
 use super::*;
 use rayon::prelude::*;
 use rand::Rng;
@@ -733,10 +735,10 @@ impl Game {
         }
     }
 
-    pub fn search_random(&mut self) -> Move {
+    pub fn search_random(&mut self) -> SearchResult {
         let moves = self.generate_moves();
         let rand = rand::thread_rng().gen_range(0..moves.len());
-        moves.get(rand).clone()
+        SearchResult::new(moves.get(rand).clone(), 0, 0, 0)
     }
 
     pub fn evaluate(&self) -> i32 {
@@ -770,125 +772,105 @@ impl Game {
         if self.active_player == Color::White { score } else { -score }
     }
 
-    ///Returns the best move and the number of nodes visited
-    pub fn alphabeta_search(&mut self, depth: u8) -> SearchResult {
-        let result = self.rec_alphabeta(depth, -100000, 100000, true);
-
-        SearchResult::new(Move::new_from_u32(result.0 as u32), result.1)
-    }
+    pub fn search(&mut self, depth: u8) -> SearchResult {
+        let mut best_move = Move::new_from_u32(0);
+        let mut nodes = 0;
     
-    fn rec_alphabeta(&mut self, depth: u8, alpha: i32, beta: i32, root: bool) -> (i32, u32) {
-        let mut nodes = 1;
+        let score = self.negamax(depth, 0, -100000, 100000, &mut best_move, &mut nodes);
+    
+        SearchResult::new(best_move, nodes, score, depth)
+    }
 
+    fn negamax(&mut self, depth: u8, ply: u8, alpha: i32, beta: i32, best_move: &mut Move, nodes: &mut u32) -> i32 {
+        *nodes += 1;
+        
         if depth == 0 {
-            return self.quiescence(alpha, beta, 0)
+            //return self.evaluate();
+            return self.quiescence(-1, ply, alpha, beta, nodes)
         }
-
+    
+        let mut temp_alpha = alpha;
         let moves = self.generate_moves();
-
+    
         //Mate & Draw
         if moves.len() == 0 {
             if self.is_in_check(self.active_player) {
-                return (-99000 - depth as i32, nodes);
+                return -99000 + ply as i32;
             }
             else {
-                return (0, 1);
+                return 0;
             }
         }
-
-        let mut new_alpha = alpha;
-        let mut best_so_far = moves.get(0);
-
+    
         for i in 0..moves.len() {
-            let mut copy = self.clone();
             let m = moves.get(i);
-            copy.make_move(m);
-
-            let result = copy.rec_alphabeta(depth - 1, -beta, -new_alpha, false);
-            let score = -result.0;
-            nodes += result.1;
             
-            //Fail hard/hard
-            if score >= beta {
-                return (beta, nodes);
+            let mut copy = self.clone();
+            copy.make_move(m);
+            let score = -copy.negamax(depth - 1, ply + 1, -beta, -temp_alpha, best_move, nodes);
+            if score > temp_alpha {
+                temp_alpha = score;
+                if ply == 0 {
+                    *best_move = m.clone();
+                }
             }
-
-            //Found better
-            if score > new_alpha {
-                new_alpha = score;
-
-                best_so_far = m;
+    
+            if temp_alpha >= beta {
+                break;
             }
         }
-
-        if !root {
-            //Fail low
-            (new_alpha, nodes)
-        }
-        else {
-            //return move
-            (best_so_far.to_u32() as i32, nodes)
-        }
+        
+        temp_alpha
     }
 
-    fn quiescence (&mut self, alpha: i32, beta: i32, ply: u8) -> (i32, u32) {
-        let mut nodes = 1;
-        let mut new_alpha = alpha;
+    fn quiescence(&mut self, q_depth: i8, ply: u8, alpha: i32, beta: i32, nodes: &mut u32) -> i32 {
+        *nodes += 1;
         let eval = self.evaluate();
 
-        //Fail hard/hard
+        if q_depth == 0 {
+            return eval
+        }
+
+        let mut temp_alpha = alpha;
+
         if eval >= beta {
-            return (beta, nodes);
+            return beta
         }
-
-        //Found better
-        if eval > new_alpha {
-            new_alpha = eval;
+        if alpha < eval {
+            temp_alpha = eval
         }
-
+    
         let moves = self.generate_moves();
-
+    
         //Mate & Draw
         if moves.len() == 0 {
             if self.is_in_check(self.active_player) {
-                return (-99000 + ply as i32, nodes);
+                return -99000 + ply as i32;
             }
             else {
-                return (0, 1);
+                return 0;
             }
         }
-
-        let mut captures = 0;
-
+    
         for i in 0..moves.len() {
             let m = moves.get(i);
             if m.is_capture() {
                 let mut copy = self.clone();
-                
                 copy.make_move(m);
 
-                let result = copy.quiescence(-beta, -new_alpha, ply + 1);
-                let score = -result.0;
-                nodes += result.1;
-                captures += 0;
-                
-                //Fail hard/hard
-                if score >= beta {
-                    return (beta, nodes);
-                }
+                let score = -copy.quiescence(q_depth - 1, ply + 1, -beta, -temp_alpha, nodes);
 
-                //Found better
-                if score > new_alpha {
-                    new_alpha = score;
+                if score > temp_alpha {
+                    temp_alpha = score;
+                }
+        
+                if temp_alpha >= beta {
+                    break;
                 }
             }
         }
-
-        if captures == 0 {
-            return (eval, nodes);
-        }
-
-        (new_alpha, nodes)
+        
+        temp_alpha
     }
 }
 
@@ -897,11 +879,13 @@ mod search_tests {
     use super::*;
 
     #[test]
-    pub fn lolololol() {
-        let mut game = Game::new_from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 10").unwrap();
-        let res = game.alphabeta_search(5);
-
-        println!("{}", res.nodes_visited)
+    pub fn negamax() {
+        let mut game = Game::new_from_start_pos();
+        let start = SystemTime::now();
+        let depth = 6;
+        let result = game.search(depth);
+        let duration = start.elapsed().unwrap();
+        println!(" Found best move: {} for depth {}. Visited: {} nodes in {}ms", result.best_move.to_uci(), depth, result.nodes_visited, duration.as_millis());
     }
 }
 

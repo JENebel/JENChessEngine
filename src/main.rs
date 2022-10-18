@@ -6,7 +6,7 @@ mod move_list;
 mod utilities;
 
 use core::panic;
-use std::{io::{self, BufRead, Write}, process, time::SystemTime, fs::{self, File}, path::Path};
+use std::{io::{self, BufRead}, process, time::SystemTime};
 
 use game::*;
 
@@ -19,18 +19,11 @@ use utilities::*;
 const LOG: bool = false;
 
 fn main() {
-
-    if LOG {
-        let dest_path = Path::new("./io_log.txt");
-        File::create(&dest_path).expect("Couldn't clear consts.rs");
-    }
-
     let mut game = Game::new_from_start_pos();
     loop {
         let stdin = io::stdin();
         for line in stdin.lock().lines() {
             let input = line.unwrap().trim().to_string();
-            if LOG { output(format!("GUI: {}", input)) }
             if input != "" {
                 let mut split = input.split(" ").peekable();
                 match split.next().unwrap().to_ascii_lowercase().as_str() {
@@ -93,31 +86,31 @@ fn main() {
                         }
                     },
                     "uci" => {
-                        output("id name JENCE".to_string());
-                        output("id author Joachim Enggård Nebel".to_string());
-                        output("uciok".to_string());
+                        print!("id name JENCE\n");
+                        print!("id author Joachim Enggård Nebel\n");
+                        print!("uciok\n");
                     },
                     "ucinewgame" => { },
-                    "isready" => output("readyok".to_string()),
+                    "isready" => print!("readyok\n"),
                     "go" => {
                         if split.peek().is_none() { break; }
                         let com = split.next().unwrap();
-                        let bestmove: Move;
+                        let result: SearchResult;
                         match com {
                             "depth" => {
                                 if split.peek().is_none() { break; }
                                 let depth_str = split.next().unwrap();
                                 let depth = depth_str.parse::<u16>();
                                 if depth.is_err() { break; }
-                                bestmove = game.alphabeta_search(depth.unwrap() as u8).best_move;
+                                result = game.search(depth.unwrap() as u8);
                             },
                             "random" => {
-                                bestmove = game.search_random();
+                                result = game.search_random();
                             },
-                            _ => bestmove = game.alphabeta_search(7).best_move
+                            _ => result = game.search(5)
                         }
-
-                        output(format!("bestmove {}", bestmove.to_uci()));
+                        print!("info score cp {} depth {} nodes {}\n", result.score, result.depth, result.nodes_visited);
+                        print!("bestmove {}\n", result.best_move.to_uci());
                     },
                     "eval" => {
                         let result = game.evaluate();
@@ -136,12 +129,14 @@ fn main() {
 }
 
 fn sbench() {
-    let mut game = Game::new_from_start_pos();
+    let mut game = Game::new_from_fen("r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9 ").unwrap();
     let start = SystemTime::now();
-    let depth = 7;
-    let result = game.alphabeta_search(depth);
+    let depth = 3;
+    let result = game.search(depth);
     let duration = start.elapsed().unwrap();
     println!(" Found best move: {} for depth {}. Visited: {} nodes in {}ms", result.best_move.to_uci(), depth, result.nodes_visited, duration.as_millis());
+    //depth 6. Visited: 3463782 nodes in 670ms
+    //depth 6. Visited: 3978248 nodes in 484ms
 }
 
 fn perft(depth: u8, mut game: Game, detail: bool) {
@@ -284,18 +279,4 @@ fn print_help() {
     println!("  {}", "make/move [move]                      - Make move with active player. move example: \"h3h4\" in case of promotion, add a Q, R, B or N, so fx. \"a6a7Q\"");
     println!("  {}", "psuite (opt)                          - Performs an extensive performance test with perft on several positions. \"opt\" can be \"long\" for longer test");
     println!("  {}", "eval                                  - Evaluates the current position, and shows the result");
-}
-
-fn output(output: String) {
-    println!("{}\n", output);
-    if LOG {
-        let mut file = fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .append(true)
-        .open("./io_log.txt")
-        .unwrap();
-        
-        writeln!(file, "{}", output).expect("Couldn't write log");
-    }
 }

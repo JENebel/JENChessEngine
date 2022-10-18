@@ -88,10 +88,6 @@ impl Move {
         result
     }
 
-    pub fn to_u32(&self) -> u32 {
-        self.data
-    }
-
     #[cfg(test)]
     pub fn print(&self) {
         print!(" From: {}", SQUARE_STRINGS[self.from_square() as usize]);
