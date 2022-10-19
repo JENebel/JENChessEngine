@@ -1,5 +1,3 @@
-use std::cmp::max;
-
 use super::*;
 use rayon::prelude::*;
 use rand::Rng;
@@ -774,21 +772,24 @@ impl Game {
 
     pub fn search(&mut self, depth: u8) -> SearchResult {
         let mut best_move = Move::new_from_u32(0);
-        let mut nodes = 0;
+
+        let mut search_info = SearchInfo::new();
     
-        let score = self.negamax(depth, 0, -100000, 100000, &mut best_move, &mut nodes);
+        let score = self.negamax(depth, -100000, 100000, &mut best_move, &mut search_info);
     
-        SearchResult::new(best_move, nodes, score, depth)
+        SearchResult::new(best_move, search_info.nodes, score, depth)
     }
 
-    fn negamax(&mut self, depth: u8, ply: u8, alpha: i32, beta: i32, best_move: &mut Move, nodes: &mut u32) -> i32 {
-        *nodes += 1;
+    fn negamax(&mut self, depth: u8, alpha: i32, beta: i32, best_move: &mut Move, info: &mut SearchInfo) -> i32 {
+        info.nodes += 1;
         
         if depth == 0 {
             //return self.evaluate();
-            return self.quiescence(-1, ply, alpha, beta, nodes)
+            return self.quiescence(-1, alpha, beta, info)
         }
     
+        let n_depth = if self.is_in_check(self.active_player) { depth + 1 } else { depth };
+
         let mut temp_alpha = alpha;
         let mut moves = self.generate_moves();
         moves.sort_moves(*self);
@@ -796,7 +797,7 @@ impl Game {
         //Mate & Draw
         if moves.len() == 0 {
             if self.is_in_check(self.active_player) {
-                return -99000 + ply as i32;
+                return -99000 + info.ply as i32;
             }
             else {
                 return 0;
@@ -808,10 +809,16 @@ impl Game {
             
             let mut copy = self.clone();
             copy.make_move(m);
-            let score = -copy.negamax(depth - 1, ply + 1, -beta, -temp_alpha, best_move, nodes);
+
+            info.ply += 1;
+
+            let score = -copy.negamax(n_depth - 1, -beta, -temp_alpha, best_move, info);
+
+            info.ply -= 1;
+
             if score > temp_alpha {
                 temp_alpha = score;
-                if ply == 0 {
+                if info.ply == 0 {
                     *best_move = m.clone();
                 }
             }
@@ -824,8 +831,8 @@ impl Game {
         temp_alpha
     }
 
-    fn quiescence(&mut self, q_depth: i8, ply: u8, alpha: i32, beta: i32, nodes: &mut u32) -> i32 {
-        *nodes += 1;
+    fn quiescence(&mut self, q_depth: i8, alpha: i32, beta: i32, info: &mut SearchInfo) -> i32 {
+        info.nodes += 1;
         let eval = self.evaluate();
 
         if q_depth == 0 {
@@ -847,7 +854,7 @@ impl Game {
         //Mate & Draw
         if moves.len() == 0 {
             if self.is_in_check(self.active_player) {
-                return -99000 + ply as i32;
+                return -99000 + info.ply as i32;
             }
             else {
                 return 0;
@@ -860,18 +867,22 @@ impl Game {
                 let mut copy = self.clone();
                 copy.make_move(m);
 
-                let score = -copy.quiescence(q_depth - 1, ply + 1, -beta, -temp_alpha, nodes);
+                info.ply += 1;
+
+                let score = -copy.quiescence(q_depth - 1, -beta, -temp_alpha, info);
+
+                info.ply -= 1;
 
                 if score > temp_alpha {
                     temp_alpha = score;
                 }
         
                 if temp_alpha >= beta {
-                    break;
+                    return beta;
                 }
             }
         }
-        
+
         temp_alpha
     }
 
@@ -905,6 +916,24 @@ impl Game {
         //Quiet moves
         else {
             0
+        }
+    }
+}
+
+pub struct SearchInfo {
+    pub nodes: u32,
+    pub ply: u8,
+    pub killer_moves: [Move; 2 * 64],
+    pub history_moves: [Move; 12 * 64]
+}
+
+impl SearchInfo {
+    pub fn new() -> Self {
+        Self {
+            nodes: 0,
+            ply: 0,
+            killer_moves: [Move::new_from_u32(0); 2*64],
+            history_moves: [Move::new_from_u32(0); 12*64]
         }
     }
 }

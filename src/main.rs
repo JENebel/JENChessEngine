@@ -16,8 +16,6 @@ use attack_tables::*;
 use move_list::*;
 use utilities::*;
 
-const LOG: bool = false;
-
 fn main() {
     let mut game = Game::new_from_start_pos();
     loop {
@@ -129,9 +127,11 @@ fn main() {
 }
 
 fn sbench() {
-    let mut game = Game::new_from_fen("r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9 ").unwrap();
+    //let mut game = Game::new_from_fen("r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9 ").unwrap();
+    let mut game = Game::new_from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1").unwrap();
+
     let start = SystemTime::now();
-    let depth = 6;
+    let depth = 4;
     let result = game.search(depth);
     let duration = start.elapsed().unwrap();
     println!(" Found best move: {} for depth {}. Visited: {} nodes in {}ms", result.best_move.to_uci(), depth, result.nodes_visited, duration.as_millis());
