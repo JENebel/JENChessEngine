@@ -4,10 +4,12 @@ pub struct MoveList {
     count: usize
 }
 
+const MOVE_LIST_SIZE: usize = 256;
+
 impl MoveList {
     pub fn new() -> Self {
         Self {
-            moves: [None; 256],
+            moves: [None; MOVE_LIST_SIZE],
             count: 0
         }
     }
@@ -41,6 +43,29 @@ impl MoveList {
         let res: Vec<Move> = self.moves.iter().take(self.count).map(|m| m.unwrap()).collect();
 
         res
+    }
+
+    ///Sorts the moves by their score_move() value with insertion sort
+    pub fn sort_moves(&mut self, game: Game) {
+        let mut scores = [0; MOVE_LIST_SIZE];
+        for i in 0..self.count {
+            scores[i] = game.score_move(self.moves[i].unwrap())
+        }
+
+        //Unoptimized!
+        for i in 0..self.count {
+            for j in (i + 1)..(self.count - 1) {
+                if scores[j] > scores[i] {
+                    let score = scores[j];
+                    scores[j] = scores[i];
+                    scores[i] = score;
+
+                    let mov = self.moves[j];
+                    self.moves[j] = self.moves[i];
+                    self.moves[i] = mov;
+                }
+            }
+        }
     }
 
     #[cfg(test)]

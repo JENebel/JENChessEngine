@@ -131,12 +131,13 @@ fn main() {
 fn sbench() {
     let mut game = Game::new_from_fen("r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9 ").unwrap();
     let start = SystemTime::now();
-    let depth = 3;
+    let depth = 6;
     let result = game.search(depth);
     let duration = start.elapsed().unwrap();
     println!(" Found best move: {} for depth {}. Visited: {} nodes in {}ms", result.best_move.to_uci(), depth, result.nodes_visited, duration.as_millis());
-    //depth 6. Visited: 3463782 nodes in 670ms
-    //depth 6. Visited: 3978248 nodes in 484ms
+    //Found best move: a7a5 for depth 4. Visited: 48707832 nodes in 21837ms
+    //Found best move: b7b5 for depth 4. Visited: 19566125 nodes in 8958ms
+    //Found best move: b7b5 for depth 4. Visited: 190479 nodes in 110ms
 }
 
 fn perft(depth: u8, mut game: Game, detail: bool) {

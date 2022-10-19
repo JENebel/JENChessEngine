@@ -790,7 +790,8 @@ impl Game {
         }
     
         let mut temp_alpha = alpha;
-        let moves = self.generate_moves();
+        let mut moves = self.generate_moves();
+        moves.sort_moves(*self);
     
         //Mate & Draw
         if moves.len() == 0 {
@@ -840,7 +841,8 @@ impl Game {
             temp_alpha = eval
         }
     
-        let moves = self.generate_moves();
+        let mut moves = self.generate_moves();
+        moves.sort_moves(*self);
     
         //Mate & Draw
         if moves.len() == 0 {
@@ -872,11 +874,56 @@ impl Game {
         
         temp_alpha
     }
+
+    pub fn score_move(&self, cmove: Move) -> i32 {
+        let to_sq = cmove.to_square();
+
+        //Captures
+        if cmove.is_capture() {
+            let start;
+            let end;
+            let mut taken = 0;
+            if self.active_player == Color::White {
+                start = Piece::BlackPawn as usize;
+                end = Piece::BlackKing as usize;
+            }
+            else {
+                start = Piece::WhitePawn as usize;
+                end = Piece::WhiteKing as usize;
+            }
+
+            for bb in start..end {
+                if self.bitboards[bb].get_bit(to_sq) {
+                    taken = bb;
+                    break;
+                }
+            }
+
+            MVV_LVA[(cmove.piece()*12 + taken as u8) as usize]
+        }
+
+        //Quiet moves
+        else {
+            0
+        }
+    }
 }
 
 #[cfg(test)]
 mod search_tests {
     use super::*;
+
+    #[test]
+    pub fn mvv_lva_test() {
+        let mut game = Game::new_from_fen("r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9 ").unwrap();
+        let mut raw_moves = game.generate_moves();
+        raw_moves.sort_moves(game);
+        let moves = raw_moves.values();
+        game.pretty_print();
+        for m in moves {
+            println!("{}, score: {}", m.to_uci(), game.score_move(m))
+        }
+    }
 
     #[test]
     pub fn negamax() {
