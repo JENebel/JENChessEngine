@@ -128,16 +128,20 @@ fn main() {
 
 fn sbench() {
     //let mut game = Game::new_from_fen("r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9 ").unwrap();
-    let mut game = Game::new_from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1").unwrap();
+    //let mut game = Game::new_from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1").unwrap();
+    let mut game = Game::new_from_fen("6k1/3q1pp1/pp5p/1r5n/8/1P3PP1/PQ4BP/2R3K1 w - - 0 1").unwrap();
 
     let start = SystemTime::now();
-    let depth = 4;
+    let depth = 6;
     let result = game.search(depth);
     let duration = start.elapsed().unwrap();
     println!(" Found best move: {} for depth {}. Visited: {} nodes in {}ms", result.best_move.to_uci(), depth, result.nodes_visited, duration.as_millis());
     //Found best move: a7a5 for depth 4. Visited: 48707832 nodes in 21837ms
     //Found best move: b7b5 for depth 4. Visited: 19566125 nodes in 8958ms
     //Found best move: b7b5 for depth 4. Visited: 190479 nodes in 110ms
+
+
+    //Found best move: f3f4 for depth 6. Visited: 6507312 nodes in 5542ms
 }
 
 fn perft(depth: u8, mut game: Game, detail: bool) {

@@ -773,31 +773,31 @@ impl Game {
     pub fn search(&mut self, depth: u8) -> SearchResult {
         let mut best_move = Move::new_from_u32(0);
 
-        let mut search_info = SearchInfo::new();
+        let mut search_env = SearchEnv::new();
     
-        let score = self.negamax(depth, -100000, 100000, &mut best_move, &mut search_info);
+        let score = self.negamax(depth, -100000, 100000, &mut best_move, &mut search_env);
     
-        SearchResult::new(best_move, search_info.nodes, score, depth)
+        SearchResult::new(best_move, search_env.nodes, score, depth)
     }
 
-    fn negamax(&mut self, depth: u8, alpha: i32, beta: i32, best_move: &mut Move, info: &mut SearchInfo) -> i32 {
-        info.nodes += 1;
+    fn negamax(&mut self, depth: u8, alpha: i32, beta: i32, best_move: &mut Move, envir: &mut SearchEnv) -> i32 {
+        envir.nodes += 1;
         
         if depth == 0 {
             //return self.evaluate();
-            return self.quiescence(-1, alpha, beta, info)
+            return self.quiescence(-1, alpha, beta, envir)
         }
     
         let n_depth = if self.is_in_check(self.active_player) { depth + 1 } else { depth };
 
         let mut temp_alpha = alpha;
         let mut moves = self.generate_moves();
-        moves.sort_moves(*self);
+        moves.sort_moves(&self, envir);
     
         //Mate & Draw
         if moves.len() == 0 {
             if self.is_in_check(self.active_player) {
-                return -99000 + info.ply as i32;
+                return -99000 + envir.ply as i32;
             }
             else {
                 return 0;
@@ -810,29 +810,36 @@ impl Game {
             let mut copy = self.clone();
             copy.make_move(m);
 
-            info.ply += 1;
+            envir.ply += 1;
 
-            let score = -copy.negamax(n_depth - 1, -beta, -temp_alpha, best_move, info);
+            let score = -copy.negamax(n_depth - 1, -beta, -temp_alpha, best_move, envir);
 
-            info.ply -= 1;
+            envir.ply -= 1;
+
+            if temp_alpha >= beta {
+                //Update killer moves
+                envir.killer_moves[1][envir.ply as usize] = envir.killer_moves[0][envir.ply as usize];
+                envir.killer_moves[0][envir.ply as usize] = *m;
+
+                break;
+            }
 
             if score > temp_alpha {
+                //Update history move
+                envir.history_moves[m.piece() as usize][m.to_square() as usize] += depth as i32;
+
                 temp_alpha = score;
-                if info.ply == 0 {
+                if envir.ply == 0 {
                     *best_move = m.clone();
                 }
-            }
-    
-            if temp_alpha >= beta {
-                break;
             }
         }
         
         temp_alpha
     }
 
-    fn quiescence(&mut self, q_depth: i8, alpha: i32, beta: i32, info: &mut SearchInfo) -> i32 {
-        info.nodes += 1;
+    fn quiescence(&mut self, q_depth: i8, alpha: i32, beta: i32, envir: &mut SearchEnv) -> i32 {
+        envir.nodes += 1;
         let eval = self.evaluate();
 
         if q_depth == 0 {
@@ -849,12 +856,12 @@ impl Game {
         }
     
         let mut moves = self.generate_moves();
-        moves.sort_moves(*self);
+        moves.sort_moves(&self, envir);
     
         //Mate & Draw
         if moves.len() == 0 {
             if self.is_in_check(self.active_player) {
-                return -99000 + info.ply as i32;
+                return -99000 + envir.ply as i32;
             }
             else {
                 return 0;
@@ -863,15 +870,15 @@ impl Game {
     
         for i in 0..moves.len() {
             let m = moves.get(i);
-            if m.is_capture() {
+            if m.is_capture() || m.is_enpassant() {
                 let mut copy = self.clone();
                 copy.make_move(m);
 
-                info.ply += 1;
+                envir.ply += 1;
 
-                let score = -copy.quiescence(q_depth - 1, -beta, -temp_alpha, info);
+                let score = -copy.quiescence(q_depth - 1, -beta, -temp_alpha, envir);
 
-                info.ply -= 1;
+                envir.ply -= 1;
 
                 if score > temp_alpha {
                     temp_alpha = score;
@@ -886,7 +893,7 @@ impl Game {
         temp_alpha
     }
 
-    pub fn score_move(&self, cmove: Move) -> i32 {
+    pub fn score_move(&self, cmove: Move, envir: &SearchEnv) -> i32 {
         let to_sq = cmove.to_square();
 
         //Captures
@@ -910,30 +917,37 @@ impl Game {
                 }
             }
 
-            MVV_LVA[(cmove.piece()*12 + taken as u8) as usize]
+            MVV_LVA[(cmove.piece()*12 + taken as u8) as usize] + 10000
         }
 
         //Quiet moves
         else {
-            0
+            if envir.killer_moves[0][envir.ply as usize] == cmove {
+                9000
+            } else if envir.killer_moves[1][envir.ply as usize] == cmove {
+                8000
+            }
+            else {
+                return envir.history_moves[cmove.piece() as usize][cmove.to_square() as usize]
+            }
         }
     }
 }
 
-pub struct SearchInfo {
+pub struct SearchEnv {
     pub nodes: u32,
     pub ply: u8,
-    pub killer_moves: [Move; 2 * 64],
-    pub history_moves: [Move; 12 * 64]
+    pub killer_moves: [[Move; 64]; 2],
+    pub history_moves: [[i32; 64]; 12]
 }
 
-impl SearchInfo {
+impl SearchEnv {
     pub fn new() -> Self {
         Self {
             nodes: 0,
             ply: 0,
-            killer_moves: [Move::new_from_u32(0); 2*64],
-            history_moves: [Move::new_from_u32(0); 12*64]
+            killer_moves: [[Move::new_from_u32(0); 64]; 2],
+            history_moves: [[0 as i32; 64]; 12]
         }
     }
 }
@@ -946,11 +960,11 @@ mod search_tests {
     pub fn mvv_lva_test() {
         let mut game = Game::new_from_fen("r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9 ").unwrap();
         let mut raw_moves = game.generate_moves();
-        raw_moves.sort_moves(game);
+        raw_moves.sort_moves(&game, &SearchEnv::new());
         let moves = raw_moves.values();
         game.pretty_print();
         for m in moves {
-            println!("{}, score: {}", m.to_uci(), game.score_move(m))
+            println!("{} - score: {}", m.to_uci(), game.score_move(m, &SearchEnv::new()))
         }
     }
 
