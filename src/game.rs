@@ -530,29 +530,28 @@ impl Game {
                     self.bitboards[Piece::WhitePawn as usize].unset_bit(to_square - 8);
                     self.white_occupancies.unset_bit(to_square - 8);
                     self.all_occupancies.unset_bit(to_square - 8);
-                    return;
+                }
+            } else {
+                let start;
+                let end;
+                if self.active_player == Color::White {
+                    start = Piece::BlackPawn as usize;
+                    end = Piece::BlackKing as usize;
+                    self.black_occupancies.unset_bit(to_square);
+                }
+                else {
+                    start = Piece::WhitePawn as usize;
+                    end = Piece::WhiteKing as usize;
+                    self.white_occupancies.unset_bit(to_square);
+                }
+
+                for bb in start..end {
+                    if self.bitboards[bb].get_bit(to_square) {
+                        self.bitboards[bb].unset_bit(to_square);
+                        break;
+                    }
                 }
             }
-            let start;
-            let end;
-            if self.active_player == Color::White {
-                start = Piece::BlackPawn as usize;
-                end = Piece::BlackKing as usize;
-                self.black_occupancies.unset_bit(to_square);
-            }
-            else {
-                start = Piece::WhitePawn as usize;
-                end = Piece::WhiteKing as usize;
-                self.white_occupancies.unset_bit(to_square);
-            }
-
-            for bb in start..end {
-                if self.bitboards[bb].get_bit(to_square) {
-                    self.bitboards[bb].unset_bit(to_square);
-                    break;
-                }
-            }
-
             //Reset half moves
             self.half_moves = 0;
         }
@@ -641,8 +640,20 @@ impl Game {
         self.bitboards[piece_ind].set_bit(to_sq);
         self.all_occupancies.set_bit(to_sq);
         let mut taken = 0;
+        
+        if cmove.is_enpassant() {
+            if self.active_player == Color::White {
+                self.bitboards[Piece::BlackPawn as usize].unset_bit(to_sq + 8);
+                self.all_occupancies.unset_bit(to_sq + 8);
+            }
+            else {
+                self.bitboards[Piece::WhitePawn as usize].unset_bit(to_sq - 8);
+                self.all_occupancies.unset_bit(to_sq - 8);
+            }
+        }
+
         //Unset captured
-        if capture {
+        else if capture {
             let start;
             let end;
             if self.active_player == Color::White {
@@ -662,16 +673,6 @@ impl Game {
                 }
             }
         }
-        else if cmove.is_enpassant() {
-            if self.active_player == Color::White {
-                self.bitboards[Piece::BlackPawn as usize].unset_bit(to_sq + 8);
-                self.all_occupancies.unset_bit(to_sq + 8);
-            }
-            else {
-                self.bitboards[Piece::WhitePawn as usize].unset_bit(to_sq - 8);
-                self.all_occupancies.unset_bit(to_sq - 8);
-            }
-        }
 
         //Add if not in check
         if !self.is_in_check(self.active_player) {
@@ -683,11 +684,10 @@ impl Game {
         self.all_occupancies.set_bit(from_sq);
         self.bitboards[piece_ind].set_bit(from_sq);
         self.bitboards[piece_ind].unset_bit(to_sq);
+        self.all_occupancies.unset_bit(to_sq);
         //Unset captured
-        if capture {
-            self.bitboards[taken].set_bit(to_sq);
-        }
-        else if cmove.is_enpassant() {
+        
+        if cmove.is_enpassant() {
             if self.active_player == Color::White {
                 self.bitboards[Piece::BlackPawn as usize].set_bit(to_sq + 8);
                 self.all_occupancies.set_bit(to_sq + 8);
@@ -696,10 +696,10 @@ impl Game {
                 self.bitboards[Piece::WhitePawn as usize].set_bit(to_sq - 8);
                 self.all_occupancies.set_bit(to_sq - 8);
             }
-            self.all_occupancies.unset_bit(to_sq);
         }
-        else {
-            self.all_occupancies.unset_bit(to_sq);
+        else if capture {
+            self.bitboards[taken].set_bit(to_sq);
+            self.all_occupancies.set_bit(to_sq);
         }
     }
 
@@ -784,7 +784,6 @@ impl Game {
         envir.nodes += 1;
         
         if depth == 0 {
-            //return self.evaluate();
             return self.quiescence(-1, alpha, beta, envir)
         }
     
@@ -981,6 +980,24 @@ mod search_tests {
 #[cfg(test)]
 mod move_gen_tests {
     use super::*;
+
+    #[test]
+    pub fn perft () {
+        let mut game = Game::new_from_start_pos();
+        let mut moves = game.generate_moves().values();
+        game.make_move(moves.iter().find(|m| m.from_square() == Square::a2 as u8 && m.to_square() == Square::a3 as u8 ).unwrap());
+        moves = game.generate_moves().values();
+        game.make_move(moves.iter().find(|m| m.from_square() == Square::d7 as u8 && m.to_square() == Square::d6 as u8 ).unwrap());
+        moves = game.generate_moves().values();
+        game.make_move(moves.iter().find(|m| m.from_square() == Square::b2 as u8 && m.to_square() == Square::b3 as u8 ).unwrap());
+        moves = game.generate_moves().values();
+        game.make_move(moves.iter().find(|m| m.from_square() == Square::c8 as u8 && m.to_square() == Square::h3 as u8 ).unwrap());
+        game.generate_moves().print();
+        let pe = game.perft(1, true);
+        game.all_occupancies.print();
+        println!("Found total: {}", pe)
+
+    }
 
     //Legal moves
     #[test]

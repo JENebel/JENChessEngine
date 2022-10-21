@@ -167,7 +167,7 @@ fn psuite() {
     let start = SystemTime::now();
     let r1 = game.perft(5, false);
     let duration1 = start.elapsed().unwrap();
-    if r1 != 4865609 {println!(" ERROR! Found {} moves for depth 5 on start position, and expected 4,865,609", r1); return }
+    if r1 != 4865609 {println!(" ERROR! Found {} moves for depth 5 on start position, and expected 4,865,609", r1); }
     println!(" Perft on starting position at depth 5 found in {}ms", duration1.as_millis());
 
     //Kiwipete
