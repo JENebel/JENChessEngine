@@ -245,7 +245,7 @@ impl Game {
     
                 //enpassant
                 if self.enpassant_square != Square::None && !attacks.and(Bitboard::from_u64(1 << self.enpassant_square as u8)).is_empty(){
-                    self.add_move_if_legal(&mut moves, Move::new(from_sq, self.enpassant_square as u8, Piece::WhitePawn as u8, Piece::None as u8, false, false, true, false));
+                    self.add_move_if_legal(&mut moves, Move::new(from_sq, self.enpassant_square as u8, Piece::WhitePawn as u8, Piece::None as u8, true, false, true, false));
                 }
 
                 //Overlap with opponent occupancies
@@ -331,7 +331,7 @@ impl Game {
     
                 //enpassant
                 if self.enpassant_square != Square::None && !attacks.and(Bitboard::from_u64(1 << self.enpassant_square as u8)).is_empty(){
-                    self.add_move_if_legal(&mut moves, Move::new(from_sq, self.enpassant_square  as u8, Piece::BlackPawn as u8, Piece::None as u8, false, false, true, false));
+                    self.add_move_if_legal(&mut moves, Move::new(from_sq, self.enpassant_square  as u8, Piece::BlackPawn as u8, Piece::None as u8, true, false, true, false));
                 }
 
                 //Overlap with opponent occupancies
@@ -519,6 +519,20 @@ impl Game {
 
         //Captures
         if capturing {
+            //Enpassant capture
+            if enpassant {
+                if self.active_player == Color::White {
+                    self.bitboards[Piece::BlackPawn as usize].unset_bit(to_square + 8);
+                    self.black_occupancies.unset_bit(to_square + 8);
+                    self.all_occupancies.unset_bit(to_square + 8);
+                }
+                else {
+                    self.bitboards[Piece::WhitePawn as usize].unset_bit(to_square - 8);
+                    self.white_occupancies.unset_bit(to_square - 8);
+                    self.all_occupancies.unset_bit(to_square - 8);
+                    return;
+                }
+            }
             let start;
             let end;
             if self.active_player == Color::White {
@@ -550,20 +564,6 @@ impl Game {
 
             //Remove pawn
             self.bitboards[piece as usize].unset_bit(to_square);
-        }
-
-        //Enpassant capture
-        else if enpassant {
-            if self.active_player == Color::White {
-                self.bitboards[Piece::BlackPawn as usize].unset_bit(to_square + 8);
-                self.black_occupancies.unset_bit(to_square + 8);
-                self.all_occupancies.unset_bit(to_square + 8);
-            }
-            else {
-                self.bitboards[Piece::WhitePawn as usize].unset_bit(to_square - 8);
-                self.white_occupancies.unset_bit(to_square - 8);
-                self.all_occupancies.unset_bit(to_square - 8);
-            }
         }
 
         //Castling
@@ -797,7 +797,7 @@ impl Game {
         //Mate & Draw
         if moves.len() == 0 {
             if self.is_in_check(self.active_player) {
-                return -99000 + envir.ply as i32;
+                return -1000000 + envir.ply as i32;
             }
             else {
                 return 0;
@@ -818,15 +818,19 @@ impl Game {
 
             if temp_alpha >= beta {
                 //Update killer moves
-                envir.killer_moves[1][envir.ply as usize] = envir.killer_moves[0][envir.ply as usize];
-                envir.killer_moves[0][envir.ply as usize] = *m;
+                if !m.is_capture() {
+                    envir.killer_moves[1][envir.ply as usize] = envir.killer_moves[0][envir.ply as usize];
+                    envir.killer_moves[0][envir.ply as usize] = Some(*m);
+                }
 
-                break;
+                return beta;
             }
 
             if score > temp_alpha {
                 //Update history move
-                envir.history_moves[m.piece() as usize][m.to_square() as usize] += depth as i32;
+                if !m.is_capture() {
+                    envir.history_moves[m.piece() as usize][m.to_square() as usize] += depth as i32
+                }
 
                 temp_alpha = score;
                 if envir.ply == 0 {
@@ -870,7 +874,7 @@ impl Game {
     
         for i in 0..moves.len() {
             let m = moves.get(i);
-            if m.is_capture() || m.is_enpassant() {
+            if m.is_capture() {
                 let mut copy = self.clone();
                 copy.make_move(m);
 
@@ -880,12 +884,12 @@ impl Game {
 
                 envir.ply -= 1;
 
-                if score > temp_alpha {
-                    temp_alpha = score;
-                }
-        
                 if temp_alpha >= beta {
                     return beta;
+                }
+
+                if score > temp_alpha {
+                    temp_alpha = score;
                 }
             }
         }
@@ -917,18 +921,18 @@ impl Game {
                 }
             }
 
-            MVV_LVA[(cmove.piece()*12 + taken as u8) as usize] + 10000
+            MVV_LVA[cmove.piece() as usize][taken as usize] + 100000
         }
 
         //Quiet moves
         else {
-            if envir.killer_moves[0][envir.ply as usize] == cmove {
-                9000
-            } else if envir.killer_moves[1][envir.ply as usize] == cmove {
-                8000
+            if envir.killer_moves[0][envir.ply as usize] == Some(cmove) {
+                90000
+            } else if envir.killer_moves[1][envir.ply as usize] == Some(cmove) {
+                80000
             }
             else {
-                return envir.history_moves[cmove.piece() as usize][cmove.to_square() as usize]
+                envir.history_moves[cmove.piece() as usize][to_sq as usize]
             }
         }
     }
@@ -937,7 +941,7 @@ impl Game {
 pub struct SearchEnv {
     pub nodes: u32,
     pub ply: u8,
-    pub killer_moves: [[Move; 64]; 2],
+    pub killer_moves: [[Option<Move>; 64]; 2],
     pub history_moves: [[i32; 64]; 12]
 }
 
@@ -946,7 +950,7 @@ impl SearchEnv {
         Self {
             nodes: 0,
             ply: 0,
-            killer_moves: [[Move::new_from_u32(0); 64]; 2],
+            killer_moves: [[None; 64]; 2],
             history_moves: [[0 as i32; 64]; 12]
         }
     }
@@ -959,13 +963,8 @@ mod search_tests {
     #[test]
     pub fn mvv_lva_test() {
         let mut game = Game::new_from_fen("r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9 ").unwrap();
-        let mut raw_moves = game.generate_moves();
-        raw_moves.sort_moves(&game, &SearchEnv::new());
-        let moves = raw_moves.values();
-        game.pretty_print();
-        for m in moves {
-            println!("{} - score: {}", m.to_uci(), game.score_move(m, &SearchEnv::new()))
-        }
+        
+        game.search(2);
     }
 
     #[test]
@@ -1025,14 +1024,14 @@ mod move_gen_tests {
         let mut game = Game::new_from_fen("k7/8/8/4Pp2/8/8/8/K7 w - f6 0 25").unwrap();
         let moves = game.generate_moves();
         moves.print();
-        assert!(moves.contains(&Move::new_friendly(Square::e5, Square::f6, Piece::WhitePawn, Piece::None, false, false, true, false)));
+        assert!(moves.contains(&Move::new_friendly(Square::e5, Square::f6, Piece::WhitePawn, Piece::None, true, false, true, false)));
     }
 
     #[test]
     pub fn black_can_enpassant_capture_correctly() {
         let mut game = Game::new_from_fen("k7/8/8/8/8/pP6/8/7K b - b2 0 25").unwrap();
         let moves = game.generate_moves();
-        assert!(moves.contains(&Move::new_friendly(Square::a3, Square::b2, Piece::BlackPawn, Piece::None, false, false, true, false)));
+        assert!(moves.contains(&Move::new_friendly(Square::a3, Square::b2, Piece::BlackPawn, Piece::None, true, false, true, false)));
     }
 
     #[test]
@@ -1300,7 +1299,7 @@ mod make_tests {
     pub fn board_correct_after_enpassant_capture() {
         let mut game = Game::new_from_fen("k7/8/8/4Pp2/8/8/8/K7 w - f6 0 25").unwrap();
         
-        game.make_move(&Move::new_friendly(Square::e5, Square::f6, Piece::WhitePawn, Piece::None, false, false, true, false));
+        game.make_move(&Move::new_friendly(Square::e5, Square::f6, Piece::WhitePawn, Piece::None, true, false, true, false));
 
         //moved to right square
         assert_eq!(game.get_piece_bitboard(Piece::WhitePawn).get_bit_sq(Square::f6), true);
@@ -1369,7 +1368,7 @@ mod make_tests {
     #[test]
     pub fn enpassant_capture_kills_the_other_pawn() {
         let mut game = Game::new_from_fen("rnbqkbnr/p1pppppp/8/Pp6/8/8/1PPPPPPP/RNBQKBNR w KQkq b6 0 2").unwrap();
-        game.make_move(&Move::new_friendly(Square::a5, Square::b6, Piece::WhitePawn, Piece::None, false, false, true, false));
+        game.make_move(&Move::new_friendly(Square::a5, Square::b6, Piece::WhitePawn, Piece::None, true, false, true, false));
         assert_eq!(game.get_piece_bitboard(Piece::BlackPawn).get_bit_sq(Square::b5), false);
         assert_eq!(game.black_occupancies.get_bit_sq(Square::b5), false);
         assert_eq!(game.all_occupancies.get_bit_sq(Square::b5), false);
