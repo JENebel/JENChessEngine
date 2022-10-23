@@ -49,21 +49,21 @@ pub enum CastlingAbility {
 #[derive(Clone, Copy)]
 pub enum Piece {
     WhitePawn   = 0,
-    WhiteRook   = 1,
-    WhiteKnight = 2,
-    WhiteBishop = 3,
+    WhiteKnight = 1,
+    WhiteBishop = 2,
+    WhiteRook   = 3,
     WhiteQueen  = 4,
     WhiteKing   = 5,
     BlackPawn   = 6,
-    BlackRook   = 7,
-    BlackKnight = 8,
-    BlackBishop = 9,
+    BlackKnight = 7,
+    BlackBishop = 8,
+    BlackRook   = 9,
     BlackQueen  = 10,
     BlackKing   = 11,
     None        = 12,
 }
 
-pub const PIECE_STRINGS: [&str; 13] = ["P", "R", "N", "B", "Q", "K", "p", "r", "n", "b", "q", "k", "None"];
+pub const PIECE_STRINGS: [&str; 13] = ["P", "N", "B", "R", "Q", "K", "p", "n", "b", "r", "q", "k", "None"];
 
 pub const CASTLING_RIGHTS: [u8; 64] = [
     7, 15, 15, 15,  3, 15, 15, 11,
@@ -116,7 +116,7 @@ pub const SQUARES: [Square; 65] = [
     Square::None
 ];
 
-pub const MATERIAL_WEIGHTS: [i32; 12] = [100, 500, 300, 350, 1000, 10000, -100, -500, -300, -350, -1000, -10000];
+pub const MATERIAL_WEIGHTS: [i32; 12] = [100, 300, 350, 500, 1000, 10000, -100, -300, -350, -500, -1000, -10000];
 
 // pawn positional score
 pub const PAWN_SCORES: [i32; 64] = 
@@ -198,7 +198,7 @@ pub const MIRRORED: [usize; 64] =
 	0,  1,  2,  3,  4,  5,  6,  7
 ];
 
-///victim * 6 + attacker
+///[attacker][victim]
 pub const MVV_LVA: [[i32; 12]; 12] = [
     [105, 205, 305, 405, 505, 605,  105, 205, 305, 405, 505, 605],
     [104, 204, 304, 404, 504, 604,  104, 204, 304, 404, 504, 604],
@@ -206,13 +206,13 @@ pub const MVV_LVA: [[i32; 12]; 12] = [
     [102, 202, 302, 402, 502, 602,  102, 202, 302, 402, 502, 602],
     [101, 201, 301, 401, 501, 601,  101, 201, 301, 401, 501, 601],
     [100, 200, 300, 400, 500, 600,  100, 200, 300, 400, 500, 600],
-
+    
     [105, 205, 305, 405, 505, 605,  105, 205, 305, 405, 505, 605],
     [104, 204, 304, 404, 504, 604,  104, 204, 304, 404, 504, 604],
     [103, 203, 303, 403, 503, 603,  103, 203, 303, 403, 503, 603],
     [102, 202, 302, 402, 502, 602,  102, 202, 302, 402, 502, 602],
     [101, 201, 301, 401, 501, 601,  101, 201, 301, 401, 501, 601],
-    [100, 200, 300, 400, 500, 600,  100, 200, 300, 400, 500, 600]
+    [100, 200, 300, 400, 500, 600,  100, 200, 300, 400, 500, 600],
 ];
 
 pub struct SearchResult {

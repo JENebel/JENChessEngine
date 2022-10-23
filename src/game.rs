@@ -27,15 +27,15 @@ impl Game {
             for x in 0..8 {
                 let piece = 
                     if self.bitboards[0].get_bit(8*y+x)         { "P." }
-                    else if self.bitboards[1].get_bit(8*y+x)    { "R." }
-                    else if self.bitboards[2].get_bit(8*y+x)    { "N." }
-                    else if self.bitboards[3].get_bit(8*y+x)    { "B." }
+                    else if self.bitboards[1].get_bit(8*y+x)    { "N." }
+                    else if self.bitboards[2].get_bit(8*y+x)    { "B." }
+                    else if self.bitboards[3].get_bit(8*y+x)    { "R." }
                     else if self.bitboards[4].get_bit(8*y+x)    { "Q." }
                     else if self.bitboards[5].get_bit(8*y+x)    { "K." }
                     else if self.bitboards[6].get_bit(8*y+x)    { "p " }
-                    else if self.bitboards[7].get_bit(8*y+x)    { "r " }
-                    else if self.bitboards[8].get_bit(8*y+x)    { "n " }
-                    else if self.bitboards[9].get_bit(8*y+x)    { "b " }
+                    else if self.bitboards[7].get_bit(8*y+x)    { "n " }
+                    else if self.bitboards[8].get_bit(8*y+x)    { "b " }
+                    else if self.bitboards[9].get_bit(8*y+x)    { "r " }
                     else if self.bitboards[10].get_bit(8*y+x)   { "q " }
                     else if self.bitboards[11].get_bit(8*y+x)   { "k " }
                     else { "  " };
@@ -747,23 +747,23 @@ impl Game {
             while !board.is_empty() {
                 let square = board.extract_bit();
                 score += MATERIAL_WEIGHTS[bb];
+                score += match bb {
+                    0  => PAWN_SCORES[square as usize],
+                    1  => KNIGHT_SCORES[square as usize],
+                    2  => BISHOP_SCORES[square as usize],
+                    3  => ROOK_SCORES[square as usize],
+                    //No queen values,
+                    5  => KING_SCORES[square as usize],
 
-                match bb {
-                    0  => score += PAWN_SCORES[square as usize],
-                    1  => score += ROOK_SCORES[square as usize],
-                    2  => score += KNIGHT_SCORES[square as usize],
-                    3  => score += BISHOP_SCORES[square as usize],
-                    4  =>  { } //No queen values,
-                    5  => score += KING_SCORES[MIRRORED[square as usize]],
+                    6  => -PAWN_SCORES[MIRRORED[square as usize]],
+                    7  => -KNIGHT_SCORES[MIRRORED[square as usize]],
+                    8  => -BISHOP_SCORES[MIRRORED[square as usize]],
+                    9  => -ROOK_SCORES[MIRRORED[square as usize]],
+                    //No queen values,
+                    11 => -KING_SCORES[MIRRORED[square as usize]],
 
-                    6  => score -= PAWN_SCORES[MIRRORED[square as usize]],
-                    7  => score -= ROOK_SCORES[MIRRORED[square as usize]],
-                    8  => score -= KNIGHT_SCORES[MIRRORED[square as usize]],
-                    9  => score -= BISHOP_SCORES[MIRRORED[square as usize]],
-                    10 => { } //No queen values,
-                    11 => score -= KING_SCORES[MIRRORED[square as usize]],
-                    _ => unreachable!()
-                }
+                    _ => 0
+                };
             }
         }
 

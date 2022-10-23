@@ -10,17 +10,35 @@ pub fn search(game: &mut Game, depth: u8) -> SearchResult {
 
     let mut score = 0;
 
-    for c_depth in 0 ..= depth {
-        envir.follow_pv = true;
-        score = negamax(game, c_depth, -100000, 100000, &mut envir);
-    }
+    let mut alpha = -50000;
+    let mut beta  =  50000;
 
-    print!("info score cp {} depth {} nodes {} pv ", score, depth, envir.nodes);
-    for i in 0..envir.pv_lengths[0] {
-        print!("{} ", envir.pv_table[0][i].to_uci());
+    let mut current_depth = 1;
+
+    while current_depth <= depth {
+        envir.follow_pv = true;
+        score = negamax(game, current_depth, alpha, beta, &mut envir);
+
+        //Narrowing aspiration window
+        if score <= alpha || score >= beta {
+            alpha = -50000;
+            beta  =  50000;
+            
+            continue;
+        }
+        
+        alpha = score - 50;
+        beta  = score + 50;
+
+        //println!("{}", envir.pv_lengths[0]);
+        print!("info score cp {} depth {} nodes {} pv ", score, current_depth, envir.nodes);
+        for i in 0..envir.pv_lengths[0] {
+            print!("{} ", envir.pv_table[0][i].to_uci());
+        }
+        print!("\n");
+
+        current_depth += 1;
     }
-    print!("\n");
-    
 
     SearchResult::new(envir.pv_table[0][0], envir.nodes, score, depth)
 }
@@ -38,16 +56,18 @@ fn enable_pv_scoring(moves: &MoveList, envir: &mut SearchEnv) {
 
 fn negamax(game: &mut Game, depth: u8, alpha: i32, beta: i32, envir: &mut SearchEnv) -> i32 {
     envir.pv_lengths[envir.ply as usize] = envir.ply as usize;
-    let mut moves_searched = 0;
-
+    
     if depth == 0 {
-        return quiescence(game, alpha, beta, envir)
+        //return game.evaluate()
+        return quiescence(game, alpha, beta, envir);
     }
 
     //Dont't go on if reached max ply
     if envir.ply >= MAX_PLY as u8 {
-        return  game.evaluate();
+        return game.evaluate();
     }
+
+    let mut moves_searched = 0;
     
     envir.nodes += 1;
 
@@ -58,14 +78,14 @@ fn negamax(game: &mut Game, depth: u8, alpha: i32, beta: i32, envir: &mut Search
     let mut temp_alpha = alpha;
 
     //Null move pruning
-    if depth >= 3 && !in_check && envir.ply > 0 {
+    if n_depth >= 3 && !in_check && envir.ply > 0 {
         let mut copy = game.clone();
         //Give opponent extra move
         copy.active_player = opposite_color(copy.active_player);
 
         copy.enpassant_square = Square::None;
 
-                                        //Depth - 1 - R with R = 2
+        //..., Depth - 1 - R (with R = 2), ...
         let score = -negamax(&mut copy, n_depth - 1 - 2, -beta, -beta + 1, envir);
 
         //Cut-off
@@ -85,7 +105,7 @@ fn negamax(game: &mut Game, depth: u8, alpha: i32, beta: i32, envir: &mut Search
     //Mate & Draw
     if moves.len() == 0 {
         if game.is_in_check(game.active_player) {
-            return -99000 + envir.ply as i32;
+            return -49000 + envir.ply as i32;
         }
         else {
             return 0;
@@ -101,24 +121,32 @@ fn negamax(game: &mut Game, depth: u8, alpha: i32, beta: i32, envir: &mut Search
         envir.ply += 1;
 
         let mut score;
-        if moves_searched == 0 && envir.ply > 1 && !copy.is_in_check(opposite_color(game.active_player)){
-            //PV Search
-            score = -negamax(&mut copy, n_depth - 1, -beta, -temp_alpha, envir);
+        if moves_searched == 0 {
+            //Full PV Search
+            score = -negamax(&mut copy, n_depth - 1, -beta, -alpha, envir);
         } else {
             //Regular search with LMR
 
-            score = if moves_searched >= FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT {
+            score = if  moves_searched >= FULL_DEPTH_MOVES && 
+                        depth >= REDUCTION_LIMIT &&
+                        !in_check &&
+                        !m.is_capture() &&
+                        !m.promotion() != Piece::None as u8 {
                 //Reduced search
                 -negamax(&mut copy, n_depth - 2, -temp_alpha - 1, -temp_alpha, envir)
-            } else { 
+
+            } else {
+                //Ensure a full search
                 temp_alpha + 1
             };
 
             if score > temp_alpha {
                 //LMR
                 score = -negamax(&mut copy, n_depth - 1, -temp_alpha - 1, -temp_alpha, envir);
+
+                //Check bounds
                 if score > temp_alpha && score < beta {
-                    //Full search
+                    //Full search on failure
                     score = -negamax(&mut copy, n_depth - 1, -beta, -temp_alpha, envir);
                 }
             }
@@ -159,11 +187,11 @@ fn quiescence(game: &mut Game, alpha: i32, beta: i32, envir: &mut SearchEnv) -> 
 
     let eval = game.evaluate();
 
-    let mut temp_alpha = alpha;
-
     if eval >= beta {
         return beta
     }
+
+    let mut temp_alpha = alpha;
 
     if eval > temp_alpha {
         temp_alpha = eval
@@ -181,7 +209,7 @@ fn quiescence(game: &mut Game, alpha: i32, beta: i32, envir: &mut SearchEnv) -> 
 
         let mut copy = game.clone();
         copy.make_move(m);
-
+        
         envir.ply += 1;
 
         let score = -quiescence(&mut copy, -beta, -temp_alpha, envir);
@@ -291,9 +319,10 @@ mod search_tests {
 
     #[test]
     pub fn mvv_lva_test() {
-        let mut game = Game::new_from_fen("r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9 ").unwrap();
+        sbench();
         
-        search(&mut game, 2);
+        //let game = Game::new_from_fen("r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9").unwrap();
+        //println!("{}", game.evaluate())
     }
 
     #[test]

@@ -54,7 +54,7 @@ impl MoveList {
         
         //Unoptimized!
         for i in 0..self.count {
-            for j in (i + 1)..(self.count - 1) {
+            for j in (i + 1)..self.count {
                 if scores[j] > scores[i] {
                     let score = scores[j];
                     scores[j] = scores[i];
