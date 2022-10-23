@@ -116,7 +116,7 @@ pub const SQUARES: [Square; 65] = [
     Square::None
 ];
 
-pub const MATERIAL_WEIGHTS: [i32; 12] = [100, 500, 350, 300, 1000, 10000, -100, -500, -350, -300, -1000, -10000];
+pub const MATERIAL_WEIGHTS: [i32; 12] = [100, 500, 300, 350, 1000, 10000, -100, -500, -300, -350, -1000, -10000];
 
 // pawn positional score
 pub const PAWN_SCORES: [i32; 64] = 

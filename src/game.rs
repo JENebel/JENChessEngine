@@ -11,8 +11,8 @@ pub struct Game {
     black_occupancies: Bitboard,
     all_occupancies: Bitboard,
 
-    active_player: Color,
-    enpassant_square: Square,
+    pub active_player: Color,
+    pub enpassant_square: Square,
     castling_ability: u8,
 
     full_moves: u16,
@@ -222,7 +222,7 @@ impl Game {
                 if !self.all_occupancies.get_bit(to_sq) {
                     //to_sq is empty
                     if to_sq >= 8 {
-                        //Quiet moves
+                        //Quiet move
                         self.add_move_if_legal(&mut moves, Move::new(from_sq, to_sq, Piece::WhitePawn as u8, Piece::None as u8, false, false, false, false));
     
                         //Double push
@@ -308,7 +308,7 @@ impl Game {
                 if !self.all_occupancies.get_bit(to_sq) {
                     //to_sq is empty
                     if to_sq <= 55 {
-                        //Quiet moves
+                        //Quiet move
                         self.add_move_if_legal(&mut moves, Move::new(from_sq, to_sq, Piece::BlackPawn as u8, Piece::None as u8, false, false, false, false));
     
                         //Double push
@@ -459,7 +459,7 @@ impl Game {
             }
         }
 
-        //Queen attacks
+        //King attacks
         while !king_bitboard.is_empty() {
             from_sq = king_bitboard.extract_bit();
 
@@ -768,212 +768,6 @@ impl Game {
         }
 
         if self.active_player == Color::White { score } else { -score }
-    }
-
-    pub fn search(&mut self, depth: u8) -> SearchResult {
-        let mut best_move = Move::new_from_u32(0);
-
-        let mut search_env = SearchEnv::new();
-    
-        let score = self.negamax(depth, -100000, 100000, &mut best_move, &mut search_env);
-    
-        SearchResult::new(best_move, search_env.nodes, score, depth)
-    }
-
-    fn negamax(&mut self, depth: u8, alpha: i32, beta: i32, best_move: &mut Move, envir: &mut SearchEnv) -> i32 {
-        envir.nodes += 1;
-        
-        if depth == 0 {
-            return self.quiescence(-1, alpha, beta, envir)
-        }
-    
-        let n_depth = if self.is_in_check(self.active_player) { depth + 1 } else { depth };
-
-        let mut temp_alpha = alpha;
-        let mut moves = self.generate_moves();
-        moves.sort_moves(&self, envir);
-    
-        //Mate & Draw
-        if moves.len() == 0 {
-            if self.is_in_check(self.active_player) {
-                return -1000000 + envir.ply as i32;
-            }
-            else {
-                return 0;
-            }
-        }
-    
-        for i in 0..moves.len() {
-            let m = moves.get(i);
-            
-            let mut copy = self.clone();
-            copy.make_move(m);
-
-            envir.ply += 1;
-
-            let score = -copy.negamax(n_depth - 1, -beta, -temp_alpha, best_move, envir);
-
-            envir.ply -= 1;
-
-            if temp_alpha >= beta {
-                //Update killer moves
-                if !m.is_capture() {
-                    envir.killer_moves[1][envir.ply as usize] = envir.killer_moves[0][envir.ply as usize];
-                    envir.killer_moves[0][envir.ply as usize] = Some(*m);
-                }
-
-                return beta;
-            }
-
-            if score > temp_alpha {
-                //Update history move
-                if !m.is_capture() {
-                    envir.history_moves[m.piece() as usize][m.to_square() as usize] += depth as i32
-                }
-
-                temp_alpha = score;
-                if envir.ply == 0 {
-                    *best_move = m.clone();
-                }
-            }
-        }
-        
-        temp_alpha
-    }
-
-    fn quiescence(&mut self, q_depth: i8, alpha: i32, beta: i32, envir: &mut SearchEnv) -> i32 {
-        envir.nodes += 1;
-        let eval = self.evaluate();
-
-        if q_depth == 0 {
-            return eval
-        }
-
-        let mut temp_alpha = alpha;
-
-        if eval >= beta {
-            return beta
-        }
-        if alpha < eval {
-            temp_alpha = eval
-        }
-    
-        let mut moves = self.generate_moves();
-        moves.sort_moves(&self, envir);
-    
-        //Mate & Draw
-        if moves.len() == 0 {
-            if self.is_in_check(self.active_player) {
-                return -99000 + envir.ply as i32;
-            }
-            else {
-                return 0;
-            }
-        }
-    
-        for i in 0..moves.len() {
-            let m = moves.get(i);
-            if m.is_capture() {
-                let mut copy = self.clone();
-                copy.make_move(m);
-
-                envir.ply += 1;
-
-                let score = -copy.quiescence(q_depth - 1, -beta, -temp_alpha, envir);
-
-                envir.ply -= 1;
-
-                if temp_alpha >= beta {
-                    return beta;
-                }
-
-                if score > temp_alpha {
-                    temp_alpha = score;
-                }
-            }
-        }
-
-        temp_alpha
-    }
-
-    pub fn score_move(&self, cmove: Move, envir: &SearchEnv) -> i32 {
-        let to_sq = cmove.to_square();
-
-        //Captures
-        if cmove.is_capture() {
-            let start;
-            let end;
-            let mut taken = 0;
-            if self.active_player == Color::White {
-                start = Piece::BlackPawn as usize;
-                end = Piece::BlackKing as usize;
-            }
-            else {
-                start = Piece::WhitePawn as usize;
-                end = Piece::WhiteKing as usize;
-            }
-
-            for bb in start..end {
-                if self.bitboards[bb].get_bit(to_sq) {
-                    taken = bb;
-                    break;
-                }
-            }
-
-            MVV_LVA[cmove.piece() as usize][taken as usize] + 100000
-        }
-
-        //Quiet moves
-        else {
-            if envir.killer_moves[0][envir.ply as usize] == Some(cmove) {
-                90000
-            } else if envir.killer_moves[1][envir.ply as usize] == Some(cmove) {
-                80000
-            }
-            else {
-                envir.history_moves[cmove.piece() as usize][to_sq as usize]
-            }
-        }
-    }
-}
-
-pub struct SearchEnv {
-    pub nodes: u32,
-    pub ply: u8,
-    pub killer_moves: [[Option<Move>; 64]; 2],
-    pub history_moves: [[i32; 64]; 12]
-}
-
-impl SearchEnv {
-    pub fn new() -> Self {
-        Self {
-            nodes: 0,
-            ply: 0,
-            killer_moves: [[None; 64]; 2],
-            history_moves: [[0 as i32; 64]; 12]
-        }
-    }
-}
-
-#[cfg(test)]
-mod search_tests {
-    use super::*;
-
-    #[test]
-    pub fn mvv_lva_test() {
-        let mut game = Game::new_from_fen("r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9 ").unwrap();
-        
-        game.search(2);
-    }
-
-    #[test]
-    pub fn negamax() {
-        let mut game = Game::new_from_start_pos();
-        let start = SystemTime::now();
-        let depth = 6;
-        let result = game.search(depth);
-        let duration = start.elapsed().unwrap();
-        println!(" Found best move: {} for depth {}. Visited: {} nodes in {}ms", result.best_move.to_uci(), depth, result.nodes_visited, duration.as_millis());
     }
 }
 

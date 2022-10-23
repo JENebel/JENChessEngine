@@ -46,12 +46,12 @@ impl MoveList {
     }
 
     ///Sorts the moves by their score_move() value with insertion sort
-    pub fn sort_moves(&mut self, game: &Game, envir: &SearchEnv) {
+    pub fn sort_moves(&mut self, game: &Game, envir: &mut SearchEnv) {
         let mut scores = [0; MOVE_LIST_SIZE];
         for i in 0..self.count {
-            scores[i] = game.score_move(self.moves[i].unwrap(), envir)
+            scores[i] = score_move(&game, self.moves[i].unwrap(), envir)
         }
-
+        
         //Unoptimized!
         for i in 0..self.count {
             for j in (i + 1)..(self.count - 1) {

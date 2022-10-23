@@ -4,6 +4,7 @@ mod attack_tables;
 mod cmove;
 mod move_list;
 mod utilities;
+mod search;
 
 use core::panic;
 use std::{io::{self, BufRead}, process, time::SystemTime};
@@ -15,6 +16,7 @@ use bitboard::*;
 use attack_tables::*;
 use move_list::*;
 use utilities::*;
+use search::*;
 
 fn main() {
     let mut game = Game::new_from_start_pos();
@@ -100,12 +102,12 @@ fn main() {
                                 let depth_str = split.next().unwrap();
                                 let depth = depth_str.parse::<u16>();
                                 if depth.is_err() { break; }
-                                result = game.search(depth.unwrap() as u8);
+                                result = search(&mut game, depth.unwrap() as u8);
                             },
                             "random" => {
                                 result = game.search_random();
                             },
-                            _ => result = game.search(5)
+                            _ => result = search(&mut game, 8)
                         }
                         print!("info score cp {} depth {} nodes {}\n", result.score, result.depth, result.nodes_visited);
                         print!("bestmove {}\n", result.best_move.to_uci());
@@ -128,8 +130,7 @@ fn main() {
 
 fn sbench() {
     let poss = [
-        //Game::new_from_fen("r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9 ").unwrap(),
-        Game::new_from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1").unwrap(),
+Game::new_from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1").unwrap(),
         //Game::new_from_fen("rnbqkb1r/pp1p1pPp/8/2p1pP2/1P1P4/3P3P/P1P1P3/RNBQKBNR w KQkq e6 0 1").unwrap(),
     //Game::new_from_fen("r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9 ").unwrap(),
         //Game::new_from_fen("6k1/3q1pp1/pp5p/1r5n/8/1P3PP1/PQ4BP/2R3K1 w - - 0 1").unwrap(),
@@ -140,13 +141,13 @@ fn sbench() {
         //Game::new_from_start_pos()
     ];
     let start = SystemTime::now();
-    let depth = 5;
+    let depth = 7;
     let mut nodes = 0;
     for mut p in poss {
         //p.pretty_print();
-        let result = p.search(depth);
+        let result = search(&mut p, depth);
         nodes += result.nodes_visited;
-        println!(" Nodes: {}\t", result.nodes_visited); 
+        println!(" Best:{}\t Nodes: {}", result.best_move.to_uci(), result.nodes_visited); 
     }
     let duration = start.elapsed().unwrap();
     println!(" RESULT: Depth: {}\t Nodes: {}\t Time: {}ms", depth, nodes, duration.as_millis()); 
@@ -187,7 +188,7 @@ fn psuite() {
     println!(" Perft on Position 3 at depth 6 found in {}ms", duration3.as_millis());
 
     //Position 4
-    let mut game = Game::new_from_fen("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1").unwrap();
+    let mut game = Game::new_from_fen("r2q1rk1/pP1p2pp/Q4n2/bbp1p3/Np6/1B3NBn/pPPP1PPP/R3K2R b KQ - 0 1").unwrap();
     let start = SystemTime::now();
     let r4 = game.perft(5, false);
     let duration4 = start.elapsed().unwrap();
@@ -247,7 +248,7 @@ fn psuite_long() {
     println!(" Perft on Position 3 at depth 7 found in {}ms", duration3.as_millis());
 
     //Position 4
-    let mut game = Game::new_from_fen("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1").unwrap();
+    let mut game = Game::new_from_fen("r2q1rk1/pP1p2pp/Q4n2/bbp1p3/Np6/1B3NBn/pPPP1PPP/R3K2R b KQ - 0 1").unwrap();
     let start = SystemTime::now();
     let r4 = game.perft(6, false);
     let duration4 = start.elapsed().unwrap();

@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [build]
-RUSTFLAGS = "-C target-cpu=<x86-64-v3>"
+RUSTFLAGS = "-C target-cpu=native"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
