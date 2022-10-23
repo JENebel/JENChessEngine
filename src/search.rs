@@ -1,9 +1,16 @@
+use rand::Rng;
+
 use super::*;
 
 const MAX_PLY: usize = 64;
 const FULL_DEPTH_MOVES: u8 = 4;
 const REDUCTION_LIMIT: u8 = 3;
 
+pub fn search_random(game: &mut Game) -> SearchResult {
+    let moves = generate_moves(&mut *game);
+    let rand = rand::thread_rng().gen_range(0..moves.len());
+    SearchResult::new(moves.get(rand).clone(), 0, 0, 0)
+}
 
 pub fn search(game: &mut Game, depth: u8) -> SearchResult {
     let mut envir = SearchEnv::new();
@@ -64,7 +71,7 @@ fn negamax(game: &mut Game, depth: u8, alpha: i32, beta: i32, envir: &mut Search
 
     //Dont't go on if reached max ply
     if envir.ply >= MAX_PLY as u8 {
-        return game.evaluate();
+        return evaluate(&game);
     }
 
     let mut moves_searched = 0;
@@ -94,7 +101,7 @@ fn negamax(game: &mut Game, depth: u8, alpha: i32, beta: i32, envir: &mut Search
         }
     }
 
-    let mut moves = game.generate_moves();
+    let mut moves = generate_moves(game);
 
     if envir.follow_pv {
         enable_pv_scoring(&moves, envir)
@@ -116,7 +123,7 @@ fn negamax(game: &mut Game, depth: u8, alpha: i32, beta: i32, envir: &mut Search
         let m = moves.get(i);
         
         let mut copy = game.clone();
-        copy.make_move(m);
+        make_move(&mut copy, m);
 
         envir.ply += 1;
 
@@ -185,7 +192,7 @@ fn negamax(game: &mut Game, depth: u8, alpha: i32, beta: i32, envir: &mut Search
 fn quiescence(game: &mut Game, alpha: i32, beta: i32, envir: &mut SearchEnv) -> i32 {
     envir.nodes += 1;
 
-    let eval = game.evaluate();
+    let eval = evaluate(&game);
 
     if eval >= beta {
         return beta
@@ -197,7 +204,7 @@ fn quiescence(game: &mut Game, alpha: i32, beta: i32, envir: &mut SearchEnv) -> 
         temp_alpha = eval
     }
 
-    let mut moves = game.generate_moves();
+    let mut moves = generate_moves(game);
     moves.sort_moves(game, envir);
 
     for i in 0..moves.len() {
@@ -208,7 +215,7 @@ fn quiescence(game: &mut Game, alpha: i32, beta: i32, envir: &mut SearchEnv) -> 
         }
 
         let mut copy = game.clone();
-        copy.make_move(m);
+        make_move(&mut copy, m);
         
         envir.ply += 1;
 
