@@ -1,11 +1,10 @@
 [package]
 name = "nebel_chess_engine"
 version = "0.1.0"
-edition = "2021"
+edition = "2022"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bitintr = { version = "0.3.0" }
 rayon = { version = "1.5.3" }
 rand = "0.8"

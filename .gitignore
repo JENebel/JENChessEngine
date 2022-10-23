@@ -1,3 +1,4 @@
 /target
 *.pdb
 *.exe
+*.lock
