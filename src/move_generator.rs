@@ -316,22 +316,23 @@ fn add_move_if_legal(game: &mut Game, move_list: &mut MoveList, cmove: Move) {
     let capture = cmove.is_capture();
     let piece_ind = cmove.piece() as usize;
 
+    let mut copy = *game;
+
     //Peek make
     //Update all_occupancies
-    game.all_occupancies.unset_bit(from_sq);
-    game.bitboards[piece_ind].unset_bit(from_sq);
-    game.bitboards[piece_ind].set_bit(to_sq);
-    game.all_occupancies.set_bit(to_sq);
-    let mut taken = 0;
+    copy.all_occupancies.unset_bit(from_sq);
+    copy.bitboards[piece_ind].unset_bit(from_sq);
+    copy.bitboards[piece_ind].set_bit(to_sq);
+    copy.all_occupancies.set_bit(to_sq);
     
     if cmove.is_enpassant() {
-        if game.active_player == Color::White {
-            game.bitboards[Piece::BlackPawn as usize].unset_bit(to_sq + 8);
-            game.all_occupancies.unset_bit(to_sq + 8);
+        if copy.active_player == Color::White {
+            copy.bitboards[Piece::BlackPawn as usize].unset_bit(to_sq + 8);
+            copy.all_occupancies.unset_bit(to_sq + 8);
         }
         else {
-            game.bitboards[Piece::WhitePawn as usize].unset_bit(to_sq - 8);
-            game.all_occupancies.unset_bit(to_sq - 8);
+            copy.bitboards[Piece::WhitePawn as usize].unset_bit(to_sq - 8);
+            copy.all_occupancies.unset_bit(to_sq - 8);
         }
     }
 
@@ -339,7 +340,7 @@ fn add_move_if_legal(game: &mut Game, move_list: &mut MoveList, cmove: Move) {
     else if capture {
         let start;
         let end;
-        if game.active_player == Color::White {
+        if copy.active_player == Color::White {
             start = Piece::BlackPawn as usize;
             end = Piece::BlackKing as usize;
         }
@@ -349,40 +350,16 @@ fn add_move_if_legal(game: &mut Game, move_list: &mut MoveList, cmove: Move) {
         }
 
         for bb in start..end {
-            if game.bitboards[bb].get_bit(to_sq) {
-                game.bitboards[bb].unset_bit(to_sq);
-                taken = bb;
+            if copy.bitboards[bb].get_bit(to_sq) {
+                copy.bitboards[bb].unset_bit(to_sq);
                 break;
             }
         }
     }
 
     //Add if not in check
-    if !game.is_in_check(game.active_player) {
+    if !copy.is_in_check(game.active_player) {
         move_list.add_move(cmove)
-    }
-
-    //Peek unmake
-    //Reset occupancies
-    game.all_occupancies.set_bit(from_sq);
-    game.bitboards[piece_ind].set_bit(from_sq);
-    game.bitboards[piece_ind].unset_bit(to_sq);
-    game.all_occupancies.unset_bit(to_sq);
-    //Unset captured
-    
-    if cmove.is_enpassant() {
-        if game.active_player == Color::White {
-            game.bitboards[Piece::BlackPawn as usize].set_bit(to_sq + 8);
-            game.all_occupancies.set_bit(to_sq + 8);
-        }
-        else {
-            game.bitboards[Piece::WhitePawn as usize].set_bit(to_sq - 8);
-            game.all_occupancies.set_bit(to_sq - 8);
-        }
-    }
-    else if capture {
-        game.bitboards[taken].set_bit(to_sq);
-        game.all_occupancies.set_bit(to_sq);
     }
 }
 
