@@ -6,7 +6,7 @@ pub fn perft(game: &mut Game, depth: u8, print: bool) -> u128 {
     let moves = generate_moves(game, MoveTypes::All);
 
     if depth == 1 {
-        return moves.legal_values(game).len() as u128;
+        return moves.bulk_count(game) as u128;
     }
 
     if depth > 2 {

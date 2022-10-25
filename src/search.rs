@@ -54,7 +54,7 @@ fn enable_pv_scoring(moves: &MoveList, envir: &mut SearchEnv) {
     envir.follow_pv = false;
 
     for i in 0..moves.len() {
-        if envir.pv_table[0][envir.ply as usize] == *moves.get(i) {
+        if envir.pv_table[0][envir.ply as usize] == moves.get(i) {
             envir.score_pv = true;
             envir.follow_pv = true;
         }
@@ -107,8 +107,6 @@ fn negamax(game: &mut Game, depth: u8, alpha: i32, beta: i32, envir: &mut Search
         enable_pv_scoring(&moves, envir)
     }
 
-    moves.sort_moves(game, envir);
-
     //Mate & Draw
     if moves.len() == 0 {
         if game.is_in_check(game.active_player) {
@@ -119,11 +117,13 @@ fn negamax(game: &mut Game, depth: u8, alpha: i32, beta: i32, envir: &mut Search
         }
     }
 
+    moves.sort_moves(game, envir);
+
     for i in 0..moves.len() {
         let m = moves.get(i);
         
         let mut copy = game.clone();
-        if !make_move(&mut copy, m) { continue; }
+        if !make_move(&mut copy, &m) { continue; }
 
         envir.ply += 1;
 
@@ -167,7 +167,7 @@ fn negamax(game: &mut Game, depth: u8, alpha: i32, beta: i32, envir: &mut Search
             //Update killer moves
             if !m.is_capture() {
                 envir.killer_moves[1][envir.ply as usize] = envir.killer_moves[0][envir.ply as usize];
-                envir.killer_moves[0][envir.ply as usize] = Some(*m);
+                envir.killer_moves[0][envir.ply as usize] = Some(m);
             }
 
             return beta;
@@ -182,7 +182,7 @@ fn negamax(game: &mut Game, depth: u8, alpha: i32, beta: i32, envir: &mut Search
             temp_alpha = score;
 
             //Insert PV node
-            envir.insert_pv_node(*m);
+            envir.insert_pv_node(m);
         }
     }
     
@@ -210,12 +210,8 @@ fn quiescence(game: &mut Game, alpha: i32, beta: i32, envir: &mut SearchEnv) -> 
     for i in 0..moves.len() {
         let m = moves.get(i);
 
-        if !m.is_capture() {
-            continue;
-        }
-
         let mut copy = game.clone();
-        if !make_move(&mut copy, m) {
+        if !make_move(&mut copy, &m) {
             continue;
         }
         
@@ -237,6 +233,7 @@ fn quiescence(game: &mut Game, alpha: i32, beta: i32, envir: &mut SearchEnv) -> 
     temp_alpha
 }
 
+#[inline(always)]
 pub fn score_move(game: &Game, cmove: Move, envir: &mut SearchEnv) -> i32 {
     if envir.score_pv {
         if envir.pv_table[0][envir.ply as usize] == cmove {

@@ -6,6 +6,7 @@ pub enum MoveTypes {
     Quiescence
 }
 
+#[inline(always)]
 pub fn generate_moves(game: &mut Game, move_types: MoveTypes) -> MoveList {
     let mut moves = MoveList::new();
     let mut from_sq: u8;
@@ -51,7 +52,7 @@ pub fn generate_moves(game: &mut Game, move_types: MoveTypes) -> MoveList {
             from_sq = pawn_bitboard.extract_bit();
             to_sq = (from_sq as i8 - 8) as u8;
             //Quiet
-            if !game.all_occupancies.get_bit(to_sq) {
+            if move_types == MoveTypes::All && !game.all_occupancies.get_bit(to_sq) {
                 //to_sq is empty
                 if to_sq >= 8 {
                     //Quiet move
@@ -100,7 +101,7 @@ pub fn generate_moves(game: &mut Game, move_types: MoveTypes) -> MoveList {
         }
 
         //Castling kingside
-        if  game.castling_ability & (CastlingAbility::WhiteKingSide as u8) != 0 &&              //castling ability
+        if  move_types == MoveTypes::All && game.castling_ability & (CastlingAbility::WhiteKingSide as u8) != 0 &&              //castling ability
             (game.all_occupancies.and(Bitboard::from_u64(6917529027641081856))).is_empty() &&   //f1 and g1 are free. 6917529027641081856 is f1 and g1 set
             !game.is_square_attacked(Square::e1 as u8, Color::Black) &&                         //e1 is notunder attack
             !game.is_square_attacked(Square::f1 as u8, Color::Black) {                          //f1 is not under attack
@@ -108,7 +109,7 @@ pub fn generate_moves(game: &mut Game, move_types: MoveTypes) -> MoveList {
                 moves.add_move(Move::new(Square::e1 as u8, Square::g1 as u8, Piece::WhiteKing as u8, Piece::None as u8, false, false, false, true))
         }
         //Castling queen
-        if  game.castling_ability & (CastlingAbility::WhiteQueenSide as u8) != 0 &&             //castling ability
+        if  move_types == MoveTypes::All && game.castling_ability & (CastlingAbility::WhiteQueenSide as u8) != 0 &&             //castling ability
             (game.all_occupancies.and(Bitboard::from_u64(1008806316530991104))).is_empty() &&   //d1, c1 and b1 are free. 1008806316530991104 is f1 and g1 set
             !game.is_square_attacked(Square::e1 as u8, Color::Black) &&                         //e1 is notunder attack
             !game.is_square_attacked(Square::d1 as u8, Color::Black) {                          //d1 is not under attack
@@ -324,6 +325,7 @@ pub fn generate_moves(game: &mut Game, move_types: MoveTypes) -> MoveList {
     moves
 }
 
+#[inline(always)]
 pub fn is_legal(game: &Game, cmove: &Move) -> bool {
     let from_sq = cmove.from_square();
     let to_sq = cmove.to_square();

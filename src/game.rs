@@ -130,6 +130,7 @@ impl Game {
         })
     }
 
+    #[inline(always)]
     pub fn is_square_attacked(&self, square: u8, by_color: Color) -> bool {
         return if by_color == Color::White {
             !get_pawn_attack_table(square, Color::Black).and(self.bitboards[Piece::WhitePawn as usize]).is_empty() ||
@@ -159,6 +160,7 @@ impl Game {
         bitboard.print();
     }
 
+    #[inline(always)]
     pub fn is_in_check(&self, color: Color) -> bool {
         if color == Color::White {
             self.is_square_attacked(self.get_piece_bitboard(Piece::WhiteKing).least_significant(), Color::Black)
@@ -168,16 +170,17 @@ impl Game {
         }
     }
 
+    #[inline(always)]
     pub fn get_piece_bitboard(&self, piece: Piece) -> Bitboard {
         self.bitboards[piece as usize]
     }
 
     pub fn parse_move(&mut self, input: String) -> Option<Move> {
-        let moves = generate_moves(&mut *self, MoveTypes::All).legal_values(self);
+        let moves = generate_moves(self, MoveTypes::All).legal_values(self);
         let m = moves.iter().find(|m| m.to_uci() == input);
         match m {
-            Some(a) => Some(a.clone()),
             None => None,
+            Some(mm) => Some(*mm)
         }
     }
 }
