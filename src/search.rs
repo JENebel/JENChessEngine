@@ -61,6 +61,7 @@ fn enable_pv_scoring(moves: &MoveList, envir: &mut SearchEnv) {
     }
 }
 
+#[inline]
 fn negamax(game: &mut Game, depth: u8, alpha: i32, beta: i32, envir: &mut SearchEnv) -> i32 {
     envir.pv_lengths[envir.ply as usize] = envir.ply as usize;
     
@@ -189,6 +190,7 @@ fn negamax(game: &mut Game, depth: u8, alpha: i32, beta: i32, envir: &mut Search
     temp_alpha
 }
 
+#[inline]
 fn quiescence(game: &mut Game, alpha: i32, beta: i32, envir: &mut SearchEnv) -> i32 {
     envir.nodes += 1;
 

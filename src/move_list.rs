@@ -9,6 +9,8 @@ pub struct MoveList {
 const MOVE_LIST_SIZE: usize = 256;
 
 impl MoveList {
+
+    #[inline(always)]
     pub fn new() -> Self {
         Self {
             moves: [NULL_MOVE; MOVE_LIST_SIZE],
