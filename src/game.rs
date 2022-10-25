@@ -173,7 +173,7 @@ impl Game {
     }
 
     pub fn parse_move(&mut self, input: String) -> Option<Move> {
-        let moves = generate_moves(&mut *self).values();
+        let moves = generate_moves(&mut *self, MoveTypes::All).legal_values(self);
         let m = moves.iter().find(|m| m.to_uci() == input);
         match m {
             Some(a) => Some(a.clone()),

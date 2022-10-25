@@ -6,7 +6,7 @@ mod move_list;
 mod utilities;
 mod search;
 mod move_generator;
-mod make_unmake;
+mod make_move;
 mod perft;
 mod evaluation;
 
@@ -22,7 +22,7 @@ use move_list::*;
 use utilities::*;
 use search::*;
 use move_generator::*;
-use make_unmake::*;
+use make_move::*;
 use perft::*;
 use evaluation::*;
 
@@ -61,7 +61,7 @@ fn main() {
                                 panic!("Illegal move");
                             }
                             else {
-                                make_move(&mut game, &parsed.unwrap())
+                                make_move(&mut game, &parsed.unwrap());
                             }
                         }
                     }
@@ -146,7 +146,7 @@ Game::new_from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQ
         Game::new_from_start_pos()
     ];
     let start = SystemTime::now();
-    let depth = 8;
+    let depth = 10;
     let mut nodes = 0;
     for mut p in poss {
         //p.pretty_print();

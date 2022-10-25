@@ -1,3 +1,5 @@
+use rayon::prelude::*;
+
 use super::*;
 pub struct MoveList {
     moves: [Option<Move>; 256],
@@ -39,10 +41,22 @@ impl MoveList {
         }
     }
 
-    pub fn values(&self) -> Vec<Move> {
-        let res: Vec<Move> = self.moves.iter().take(self.count).map(|m| m.unwrap()).collect();
+    pub fn legal_values(&self, game: &Game) -> Vec<Move> {
+        let res: Vec<Move> = self.moves.iter().take(self.count).map(|m| m.unwrap()).filter(|m| is_legal(game, m)).collect();
 
         res
+    }
+
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = Move> + 'a {
+        self.moves.iter().take(self.count).map(|m| m.expect("Move is None here!"))
+    }
+
+    pub fn par_iter<'a>(&'a self) -> impl ParallelIterator<Item = Move> + 'a {
+        self.moves.par_iter().take(self.count).map(|m| m.expect("Move is None here!"))
+    }
+
+    pub fn count_legal(&self, game: &mut Game) -> usize {
+        self.par_iter().filter(|m| is_legal(game, m)).count()
     }
 
     ///Sorts the moves by their score_move() value with insertion sort
@@ -81,4 +95,10 @@ impl MoveList {
 
         return v
     }
+}
+
+trait MoveContainer<'a> {
+    type ItemIterator: Iterator<Item=&'a u8>;
+
+    fn items(&'a self) -> Self::ItemIterator;
 }

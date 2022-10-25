@@ -1,22 +1,16 @@
 use super::*;
 
-pub fn make_move(game: &mut Game, cmove: &Move) {
+pub fn make_move(game: &mut Game, cmove: &Move) -> bool {
+
     let from_square = cmove.from_square();
     let to_square   = cmove.to_square();
-    let promotion   = cmove.promotion();
     let piece       = cmove.piece();
     let capturing   = cmove.is_capture();
+
+    let promotion   = cmove.promotion();
     let double_push = cmove.is_double_push();
     let enpassant   = cmove.is_enpassant();
     let castling    = cmove.is_castling();
-
-    //Increment half moves counter if quet and reset if pawn
-    if piece == Piece::WhitePawn as u8 || piece == Piece::BlackPawn as u8 {
-        game.half_moves = 0;
-    }
-    else {
-        game.half_moves += 1;
-    }
 
     //Update bitboards
     game.bitboards[piece as usize].unset_bit(from_square);
@@ -24,14 +18,6 @@ pub fn make_move(game: &mut Game, cmove: &Move) {
 
     game.all_occupancies.unset_bit(from_square);
     game.all_occupancies.set_bit(to_square);
-
-    if game.active_player == Color::White {
-        game.white_occupancies.unset_bit(from_square);
-        game.white_occupancies.set_bit(to_square);
-    } else {
-        game.black_occupancies.unset_bit(from_square);
-        game.black_occupancies.set_bit(to_square);
-    }
 
     //Captures
     if capturing {
@@ -68,8 +54,27 @@ pub fn make_move(game: &mut Game, cmove: &Move) {
                 }
             }
         }
-        //Reset half moves
+    }
+
+    //Check check
+    if game.is_in_check(game.active_player) {
+        return false
+    }
+
+    if game.active_player == Color::White {
+        game.white_occupancies.unset_bit(from_square);
+        game.white_occupancies.set_bit(to_square);
+    } else {
+        game.black_occupancies.unset_bit(from_square);
+        game.black_occupancies.set_bit(to_square);
+    }
+
+    //Increment half moves counter if quet and reset if pawn
+    if piece == Piece::WhitePawn as u8 || piece == Piece::BlackPawn as u8 || capturing{
         game.half_moves = 0;
+    }
+    else {
+        game.half_moves += 1;
     }
 
     //Promotions
@@ -140,7 +145,9 @@ pub fn make_move(game: &mut Game, cmove: &Move) {
     if game.active_player == Color::Black {
         game.full_moves += 1;
     }
-    game.active_player = opposite_color(game.active_player)
+    game.active_player = opposite_color(game.active_player);
+
+    true
 }
 
 #[cfg(test)]
@@ -176,11 +183,11 @@ mod make_tests {
     pub fn switches_active_player_after_move() {
         let mut game = Game::new_from_start_pos();
 
-        let moves = generate_moves(&mut game, ).all_from(Square::c2);
+        let moves = generate_moves(&mut game, MoveTypes::All).all_from(Square::c2);
         make_move(&mut game, &moves[0]);
         assert_eq!(game.active_player, Color::Black);
 
-        let moves = generate_moves(&mut game, ).all_from(Square::f7);
+        let moves = generate_moves(&mut game, MoveTypes::All).all_from(Square::f7);
         make_move(&mut game, &moves[0]);
         assert_eq!(game.active_player, Color::White);
     }
@@ -190,11 +197,11 @@ mod make_tests {
         let mut game = Game::new_from_start_pos();
         assert_eq!(game.full_moves, 1);
 
-        let moves = generate_moves(&mut game, ).all_from(Square::c2);
+        let moves = generate_moves(&mut game, MoveTypes::All).all_from(Square::c2);
         make_move(&mut game, &moves[0]);
         assert_eq!(game.full_moves, 1);
 
-        let moves = generate_moves(&mut game, ).all_from(Square::f7);
+        let moves = generate_moves(&mut game, MoveTypes::All).all_from(Square::f7);
         make_move(&mut game, &moves[0]);
         assert_eq!(game.full_moves, 2);
     }

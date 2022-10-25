@@ -7,7 +7,7 @@ const FULL_DEPTH_MOVES: u8 = 4;
 const REDUCTION_LIMIT: u8 = 3;
 
 pub fn search_random(game: &mut Game) -> SearchResult {
-    let moves = generate_moves(&mut *game);
+    let moves = generate_moves(&mut *game, MoveTypes::All);
     let rand = rand::thread_rng().gen_range(0..moves.len());
     SearchResult::new(moves.get(rand).clone(), 0, 0, 0)
 }
@@ -65,7 +65,7 @@ fn negamax(game: &mut Game, depth: u8, alpha: i32, beta: i32, envir: &mut Search
     envir.pv_lengths[envir.ply as usize] = envir.ply as usize;
     
     if depth == 0 {
-        //return game.evaluate()
+        //return evaluate(game)
         return quiescence(game, alpha, beta, envir);
     }
 
@@ -101,7 +101,7 @@ fn negamax(game: &mut Game, depth: u8, alpha: i32, beta: i32, envir: &mut Search
         }
     }
 
-    let mut moves = generate_moves(game);
+    let mut moves = generate_moves(game, MoveTypes::All);
 
     if envir.follow_pv {
         enable_pv_scoring(&moves, envir)
@@ -123,7 +123,7 @@ fn negamax(game: &mut Game, depth: u8, alpha: i32, beta: i32, envir: &mut Search
         let m = moves.get(i);
         
         let mut copy = game.clone();
-        make_move(&mut copy, m);
+        if !make_move(&mut copy, m) { continue; }
 
         envir.ply += 1;
 
@@ -204,7 +204,7 @@ fn quiescence(game: &mut Game, alpha: i32, beta: i32, envir: &mut SearchEnv) -> 
         temp_alpha = eval
     }
 
-    let mut moves = generate_moves(game);
+    let mut moves = generate_moves(game, MoveTypes::Quiescence);
     moves.sort_moves(game, envir);
 
     for i in 0..moves.len() {
@@ -215,7 +215,9 @@ fn quiescence(game: &mut Game, alpha: i32, beta: i32, envir: &mut SearchEnv) -> 
         }
 
         let mut copy = game.clone();
-        make_move(&mut copy, m);
+        if !make_move(&mut copy, m) {
+            continue;
+        }
         
         envir.ply += 1;
 
