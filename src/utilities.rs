@@ -219,11 +219,12 @@ pub struct SearchResult {
     pub best_move: Move,
     pub nodes_visited: u32,
     pub score: i32,
-    pub depth: u8
+    pub depth: u8,
+    pub interrupted: bool
 }
 
 impl SearchResult {
-    pub fn new(cmove: Move, nodes: u32, score: i32, depth: u8) -> Self {
-        Self { best_move: cmove, nodes_visited: nodes, score: score, depth: depth }
+    pub fn new(cmove: Move, nodes: u32, score: i32, depth: u8, interrupted: bool) -> Self {
+        Self { best_move: cmove, nodes_visited: nodes, score: score, depth: depth, interrupted }
     }
 }

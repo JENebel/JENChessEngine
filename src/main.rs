@@ -152,6 +152,10 @@ Game::new_from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQ
         //p.pretty_print();
         let result = search(&mut p, depth);
         nodes += result.nodes_visited;
+        if result.interrupted {
+            println!("Interrupted");
+            return
+        }
         println!(" Best:{}\t Nodes: {}", result.best_move.to_uci(), result.nodes_visited); 
     }
     let duration = start.elapsed().unwrap();

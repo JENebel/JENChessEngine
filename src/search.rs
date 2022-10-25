@@ -1,4 +1,8 @@
-use rand::Rng;
+use rand::{Rng, Error};
+use std::io::{self, Stdin, stdin};
+use std::sync::mpsc::{self, TryRecvError};
+use std::sync::mpsc::Receiver;
+use std::{thread};
 
 use super::*;
 
@@ -9,7 +13,7 @@ const REDUCTION_LIMIT: u8 = 3;
 pub fn search_random(game: &mut Game) -> SearchResult {
     let moves = generate_moves(&mut *game, MoveTypes::All);
     let rand = rand::thread_rng().gen_range(0..moves.len());
-    SearchResult::new(moves.get(rand).clone(), 0, 0, 0)
+    SearchResult::new(moves.get(rand).clone(), 0, 0, 0, false)
 }
 
 pub fn search(game: &mut Game, depth: u8) -> SearchResult {
@@ -23,6 +27,8 @@ pub fn search(game: &mut Game, depth: u8) -> SearchResult {
     let mut current_depth = 1;
 
     while current_depth <= depth {
+        if envir.stopping {break}
+
         envir.follow_pv = true;
         score = negamax(game, current_depth, alpha, beta, &mut envir);
 
@@ -47,7 +53,7 @@ pub fn search(game: &mut Game, depth: u8) -> SearchResult {
         current_depth += 1;
     }
 
-    SearchResult::new(envir.pv_table[0][0], envir.nodes, score, depth)
+    SearchResult::new(envir.pv_table[0][0], envir.nodes, score, current_depth, envir.stopping)
 }
 
 fn enable_pv_scoring(moves: &MoveList, envir: &mut SearchEnv) {
@@ -63,6 +69,10 @@ fn enable_pv_scoring(moves: &MoveList, envir: &mut SearchEnv) {
 
 #[inline]
 fn negamax(game: &mut Game, depth: u8, alpha: i32, beta: i32, envir: &mut SearchEnv) -> i32 {
+    if envir.nodes & 2047 == 2047  {
+        envir.poll_input()
+    }
+
     envir.pv_lengths[envir.ply as usize] = envir.ply as usize;
     
     if depth == 0 {
@@ -95,6 +105,8 @@ fn negamax(game: &mut Game, depth: u8, alpha: i32, beta: i32, envir: &mut Search
 
         //..., Depth - 1 - R (with R = 2), ...
         let score = -negamax(&mut copy, n_depth - 1 - 2, -beta, -beta + 1, envir);
+
+        if envir.stopping { return 0 }
 
         //Cut-off
         if score >= beta {
@@ -162,6 +174,8 @@ fn negamax(game: &mut Game, depth: u8, alpha: i32, beta: i32, envir: &mut Search
 
         envir.ply -= 1;
 
+        if envir.stopping { return 0 }
+
         moves_searched += 1;
 
         if score >= beta {
@@ -192,6 +206,10 @@ fn negamax(game: &mut Game, depth: u8, alpha: i32, beta: i32, envir: &mut Search
 
 #[inline]
 fn quiescence(game: &mut Game, alpha: i32, beta: i32, envir: &mut SearchEnv) -> i32 {
+    if envir.nodes & 2047 == 2047 {
+        envir.poll_input()
+    }
+
     envir.nodes += 1;
 
     let eval = evaluate(&game);
@@ -291,10 +309,19 @@ pub struct SearchEnv {
     pub pv_table: [[Move; MAX_PLY]; MAX_PLY],
     pub follow_pv: bool,
     pub score_pv: bool,
+    pub stopping: bool,
+    input: Receiver<String>
 }
 
 impl SearchEnv {
     pub fn new() -> Self {
+        let (tx, rx) = mpsc::channel::<String>();
+        thread::spawn(move || loop {
+            let mut buffer = String::new();
+            stdin().lock().read_line(&mut buffer).unwrap();
+            tx.send(buffer).unwrap_or_default();
+        });
+
         Self {
             nodes: 0,
             ply: 0,
@@ -304,6 +331,8 @@ impl SearchEnv {
             pv_table: [[NULL_MOVE; 64]; 64],
             follow_pv: false,
             score_pv: false,
+            stopping: false,
+            input: rx
         }
     }
 
@@ -318,11 +347,28 @@ impl SearchEnv {
 
         self.pv_lengths[ply] = self.pv_lengths[ply + 1];
     }
+
+    pub fn poll_input(&mut self) {
+        match self.input.try_recv() {
+            Ok(input) => {
+                println!("          RECEIVED INPUT");
+                self.stopping = true;
+                match input.as_str() {
+                    "quit" => {}
+                    "stop" => {}
+                    _ => {}
+                }
+            },
+            _ => {}
+        }
+    }
 }
 
 
 #[cfg(test)]
 mod search_tests {
+    use std::io::stdin;
+
     use super::*;
 
     #[test]
@@ -337,7 +383,7 @@ mod search_tests {
     pub fn negamax() {
         let mut game = Game::new_from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1").unwrap();
         let start = SystemTime::now();
-        let depth = 6;
+        let depth = 12;
         let result = search(&mut game, depth);
         let duration = start.elapsed().unwrap();
         println!(" Found best move: {} for depth {}. Visited: {} nodes in {}ms", result.best_move.to_uci(), depth, result.nodes_visited, duration.as_millis());
