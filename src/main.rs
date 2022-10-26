@@ -114,7 +114,7 @@ fn main() {
                         "random" => {
                             result = search_random(&mut game);
                         },
-                        _ => result = search(&mut game, 8)
+                        _ => result = search(&mut game, 9)
                     }
                     print!("info score cp {} depth {} nodes {}\n", result.score, result.depth, result.nodes_visited);
                     print!("bestmove {}\n", result.best_move.to_uci());

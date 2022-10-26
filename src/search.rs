@@ -28,6 +28,9 @@ pub fn search(game: &mut Game, depth: u8) -> SearchResult {
 
     while current_depth <= depth {
         if envir.stopping {break}
+        
+
+        print!("C: {}, D: {}", current_depth, depth);
 
         envir.follow_pv = true;
         score = negamax(game, current_depth, alpha, beta, &mut envir);
@@ -37,13 +40,13 @@ pub fn search(game: &mut Game, depth: u8) -> SearchResult {
             alpha = -50000;
             beta  =  50000;
             
+            current_depth += 1;
             continue;
         }
         
         alpha = score - 50;
         beta  = score + 50;
 
-        //println!("{}", envir.pv_lengths[0]);
         print!("info score cp {} depth {} nodes {} pv ", score, current_depth, envir.nodes);
         for i in 0..envir.pv_lengths[0] {
             print!("{} ", envir.pv_table[0][i].to_uci());
@@ -53,7 +56,7 @@ pub fn search(game: &mut Game, depth: u8) -> SearchResult {
         current_depth += 1;
     }
 
-    SearchResult::new(envir.pv_table[0][0], envir.nodes, score, current_depth, envir.stopping)
+    SearchResult::new(envir.pv_table[0][0], envir.nodes, score, current_depth - 1, envir.stopping)
 }
 
 fn enable_pv_scoring(moves: &MoveList, envir: &mut SearchEnv) {
