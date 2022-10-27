@@ -11,7 +11,7 @@ mod perft;
 mod evaluation;
 
 use core::panic;
-use std::{io::{self}, process, time::SystemTime, sync::mpsc::{self, Receiver}};
+use std::{io::{self}, process, time::SystemTime};
 
 use game::*;
 

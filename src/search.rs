@@ -1,8 +1,4 @@
 use rand::{Rng};
-use std::io::{stdin};
-use std::sync::mpsc;
-use std::sync::mpsc::Receiver;
-use std::{thread};
 
 use super::*;
 

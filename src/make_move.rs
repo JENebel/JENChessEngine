@@ -12,9 +12,15 @@ pub fn make_move(game: &mut Game, cmove: &Move) -> bool {
     let enpassant   = cmove.is_enpassant();
     let castling    = cmove.is_castling();
 
+    //reset zobrist enpasssant/castling
+    if game.enpassant_square != Square::None { game.zobrist_hash ^= ENPASSANT_KEYS[game.enpassant_square as usize] };
+    game.zobrist_hash ^= CASTLE_KEYS[game.castling_ability as usize];
+
     //Update bitboards
     game.bitboards[piece as usize].unset_bit(from_square);
+    game.zobrist_hash ^= PIECE_KEYS[piece as usize][from_square as usize];
     game.bitboards[piece as usize].set_bit(to_square);
+    game.zobrist_hash ^= PIECE_KEYS[piece as usize][to_square as usize];
 
     game.all_occupancies.unset_bit(from_square);
     game.all_occupancies.set_bit(to_square);
@@ -27,11 +33,13 @@ pub fn make_move(game: &mut Game, cmove: &Move) -> bool {
                 game.bitboards[Piece::BlackPawn as usize].unset_bit(to_square + 8);
                 game.black_occupancies.unset_bit(to_square + 8);
                 game.all_occupancies.unset_bit(to_square + 8);
+                game.zobrist_hash ^= PIECE_KEYS[Piece::BlackPawn as usize][to_square as usize + 8];
             }
             else {
                 game.bitboards[Piece::WhitePawn as usize].unset_bit(to_square - 8);
                 game.white_occupancies.unset_bit(to_square - 8);
                 game.all_occupancies.unset_bit(to_square - 8);
+                game.zobrist_hash ^= PIECE_KEYS[Piece::WhitePawn as usize][to_square as usize - 8];
             }
         } else {
             let start;
@@ -47,9 +55,11 @@ pub fn make_move(game: &mut Game, cmove: &Move) -> bool {
                 game.white_occupancies.unset_bit(to_square);
             }
 
-            for bb in start..end {
-                if game.bitboards[bb].get_bit(to_square) {
-                    game.bitboards[bb].unset_bit(to_square);
+            for piece in start..end {
+                if game.bitboards[piece].get_bit(to_square) {
+                    game.bitboards[piece].unset_bit(to_square);
+                    game.zobrist_hash ^= PIECE_KEYS[piece as usize][to_square as usize];
+
                     break;
                 }
             }
@@ -61,7 +71,7 @@ pub fn make_move(game: &mut Game, cmove: &Move) -> bool {
         return false
     }
     
-
+    //Set/unset color occupancies
     if game.active_player == Color::White {
         game.white_occupancies.unset_bit(from_square);
         game.white_occupancies.set_bit(to_square);
@@ -70,7 +80,7 @@ pub fn make_move(game: &mut Game, cmove: &Move) -> bool {
         game.black_occupancies.set_bit(to_square);
     }
 
-    //Increment half moves counter if quet and reset if pawn
+    //Increment half moves counter if quiet and reset if pawn
     if piece == Piece::WhitePawn as u8 || piece == Piece::BlackPawn as u8 || capturing{
         game.half_moves = 0;
     }
@@ -85,6 +95,10 @@ pub fn make_move(game: &mut Game, cmove: &Move) -> bool {
 
         //Remove pawn
         game.bitboards[piece as usize].unset_bit(to_square);
+
+        //Zobrist update
+        game.zobrist_hash ^= PIECE_KEYS[piece as usize][to_square as usize];
+        game.zobrist_hash ^= PIECE_KEYS[promotion as usize][to_square as usize];
     }
 
     //Castling
@@ -92,7 +106,9 @@ pub fn make_move(game: &mut Game, cmove: &Move) -> bool {
         match to_square {
             62 => { //White kingside
                 game.bitboards[Piece::WhiteRook as usize].set_bit_sq(Square::f1);
+                game.zobrist_hash ^= PIECE_KEYS[Piece::WhiteRook as usize][Square::f1 as usize];
                 game.bitboards[Piece::WhiteRook as usize].unset_bit_sq(Square::h1);
+                game.zobrist_hash ^= PIECE_KEYS[Piece::WhiteRook as usize][Square::h1 as usize];
                 game.white_occupancies.set_bit_sq(Square::f1);
                 game.white_occupancies.unset_bit_sq(Square::h1);
                 game.all_occupancies.set_bit_sq(Square::f1);
@@ -100,7 +116,9 @@ pub fn make_move(game: &mut Game, cmove: &Move) -> bool {
             }
             58 => { //White queenside
                 game.bitboards[Piece::WhiteRook as usize].set_bit_sq(Square::d1);
+                game.zobrist_hash ^= PIECE_KEYS[Piece::WhiteRook as usize][Square::d1 as usize];
                 game.bitboards[Piece::WhiteRook as usize].unset_bit_sq(Square::a1);
+                game.zobrist_hash ^= PIECE_KEYS[Piece::WhiteRook as usize][Square::a1 as usize];
                 game.white_occupancies.set_bit_sq(Square::d1);
                 game.white_occupancies.unset_bit_sq(Square::a1);
                 game.all_occupancies.set_bit_sq(Square::d1);
@@ -108,7 +126,9 @@ pub fn make_move(game: &mut Game, cmove: &Move) -> bool {
             }
             6 => { //Black kingside
                 game.bitboards[Piece::BlackRook as usize].set_bit_sq(Square::f8);
+                game.zobrist_hash ^= PIECE_KEYS[Piece::BlackRook as usize][Square::f8 as usize];
                 game.bitboards[Piece::BlackRook as usize].unset_bit_sq(Square::h8);
+                game.zobrist_hash ^= PIECE_KEYS[Piece::BlackRook as usize][Square::h8 as usize];
                 game.black_occupancies.set_bit_sq(Square::f8);
                 game.black_occupancies.unset_bit_sq(Square::h8);
                 game.all_occupancies.set_bit_sq(Square::f8);
@@ -116,7 +136,9 @@ pub fn make_move(game: &mut Game, cmove: &Move) -> bool {
             }
             2 => { //Black queenside
                 game.bitboards[Piece::BlackRook as usize].set_bit_sq(Square::d8);
+                game.zobrist_hash ^= PIECE_KEYS[Piece::BlackRook as usize][Square::d8 as usize];
                 game.bitboards[Piece::BlackRook as usize].unset_bit_sq(Square::a8);
+                game.zobrist_hash ^= PIECE_KEYS[Piece::BlackRook as usize][Square::a8 as usize];
                 game.black_occupancies.set_bit_sq(Square::d8);
                 game.black_occupancies.unset_bit_sq(Square::a8);
                 game.all_occupancies.set_bit_sq(Square::d8);
@@ -129,10 +151,12 @@ pub fn make_move(game: &mut Game, cmove: &Move) -> bool {
     //Double push
     if double_push {
         if game.active_player == Color::White {
-            game.enpassant_square = SQUARES[(to_square + 8) as usize];
+            game.enpassant_square = SQUARES[to_square as usize + 8];
+            game.zobrist_hash ^= ENPASSANT_KEYS[to_square as usize + 8];
         }
         else {
-            game.enpassant_square = SQUARES[(to_square - 8) as usize];
+            game.enpassant_square = SQUARES[to_square as usize - 8];
+            game.zobrist_hash ^= ENPASSANT_KEYS[to_square as usize - 8];
         }
     }
     else {
@@ -141,12 +165,15 @@ pub fn make_move(game: &mut Game, cmove: &Move) -> bool {
 
     //Update castling abililties
     game.castling_ability &= CASTLING_RIGHTS[to_square as usize] & CASTLING_RIGHTS[from_square as usize];
+    game.zobrist_hash ^= CASTLE_KEYS[game.castling_ability as usize];
 
     //increment fullmoves & switch player
     if game.active_player == Color::Black {
         game.full_moves += 1;
     }
+
     game.active_player = opposite_color(game.active_player);
+    game.zobrist_hash ^= SIDE_KEY;
 
     true
 }

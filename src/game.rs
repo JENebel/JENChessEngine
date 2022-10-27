@@ -14,7 +14,8 @@ pub struct Game {
     pub castling_ability: u8,
 
     pub full_moves: u16,
-    pub half_moves: u8
+    pub half_moves: u8,
+    pub zobrist_hash: u64
 }
 
 impl Game {
@@ -51,7 +52,8 @@ impl Game {
         println!("\tFull moves: {}",    self.full_moves);
         print!("   Enpassant:  {}",     SQUARE_STRINGS[self.enpassant_square as usize]);
         println!("\tHalf moves: {}",    self.half_moves);
-        println!("   Castling:   {}\n", self.castling_ability_string());
+        println!("   Castling:   {}", self.castling_ability_string());
+        println!("\tZobrist:   {:#0x}\n", self.make_zobrist_hash());
     }
 
     fn castling_ability_string(&self) -> String {
@@ -115,7 +117,7 @@ impl Game {
         let half_moves: u8 =  if split.peek().is_some() { split.next().unwrap().parse::<u8>().unwrap()  } else { 0 };
         let full_moves: u16 = if split.peek().is_some() { split.next().unwrap().parse::<u16>().unwrap() } else { 0 };
 
-        Some(Self { 
+        let mut game = Self { 
             bitboards: bitboards,
             white_occupancies: white_occupancies,
             black_occupancies: black_occupancies,
@@ -126,8 +128,13 @@ impl Game {
             enpassant_square: enpassant_sq,
 
             full_moves: full_moves,
-            half_moves: half_moves
-        })
+            half_moves: half_moves,
+            zobrist_hash: 0
+        };
+
+        game.zobrist_hash = game.make_zobrist_hash();
+
+        Some(game)
     }
 
     #[inline(always)]
@@ -182,5 +189,43 @@ impl Game {
             None => None,
             Some(mm) => Some(*mm)
         }
+    }
+
+    pub fn make_zobrist_hash(&self) -> u64 {
+        let mut hash = 0;
+
+        for piece in 0..12 {
+            let mut bb = self.bitboards[piece];
+            while !bb.is_empty() {
+                let ind = bb.extract_bit();
+
+                hash ^= PIECE_KEYS[piece][ind as usize];
+            }
+        }
+
+        hash ^= CASTLE_KEYS[self.castling_ability as usize];
+        
+        if self.active_player == Color::Black {
+            hash ^= SIDE_KEY;
+        }
+
+        if self.enpassant_square != Square::None {
+            hash ^= ENPASSANT_KEYS[self.enpassant_square as usize];
+        }
+
+        hash
+    }
+}
+
+#[cfg(test)]
+mod make_tests {
+    use super::*;
+
+    #[test]
+    pub fn zobrist() {
+        let mut game = Game::new_from_fen("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10").unwrap();
+
+
+        debug_perft(&mut game, 5);
     }
 }
