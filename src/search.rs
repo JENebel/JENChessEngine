@@ -1,3 +1,5 @@
+use transposition_table::*;
+
 use rand::{Rng};
 
 use super::*;
@@ -311,7 +313,8 @@ pub struct SearchEnv<'a> {
     pub stopping: bool,
     io_receiver: &'a IoWrapper,
     start_time: SystemTime,
-    max_time: i64
+    max_time: i64,
+    transposition_table: TranspositionTable
 }
 
 impl <'a>SearchEnv<'a> {
@@ -329,6 +332,7 @@ impl <'a>SearchEnv<'a> {
             io_receiver: io_receiver,
             start_time: SystemTime::now(),
             max_time: max_time,
+            transposition_table: TranspositionTable::new()
         }
     }
 

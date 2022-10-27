@@ -9,6 +9,7 @@ mod move_generator;
 mod make_move;
 mod perft;
 mod evaluation;
+mod transposition_table;
 
 use core::panic;
 use std::{io::{self}, process, time::SystemTime};
@@ -25,6 +26,7 @@ use move_generator::*;
 use make_move::*;
 use perft::*;
 use evaluation::*;
+use transposition_table::*;
 
 fn main() {
     let io_receiver = IoWrapper::init();
