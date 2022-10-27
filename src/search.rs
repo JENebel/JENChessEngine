@@ -1,6 +1,6 @@
-use rand::{Rng, Error};
-use std::io::{self, Stdin, stdin};
-use std::sync::mpsc::{self, TryRecvError};
+use rand::{Rng};
+use std::io::{stdin};
+use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::{thread};
 
@@ -10,30 +10,28 @@ const MAX_PLY: usize = 64;
 const FULL_DEPTH_MOVES: u8 = 4;
 const REDUCTION_LIMIT: u8 = 3;
 
-pub fn search_random(game: &mut Game) -> SearchResult {
+pub fn search_random(game: &mut Game) {
     let moves = generate_moves(&mut *game, MoveTypes::All);
     let rand = rand::thread_rng().gen_range(0..moves.len());
-    SearchResult::new(moves.get(rand).clone(), 0, 0, 0, false)
+    moves.get(rand).to_uci();
 }
 
-pub fn search(game: &mut Game, depth: u8) -> SearchResult {
-    let mut envir = SearchEnv::new();
+//Start a search, max_time = -1 for no limit
+pub fn search(game: &mut Game, depth: i8, max_time: i64, io_receiver: &IoWrapper) -> SearchResult {
+    let mut envir = SearchEnv::new(max_time, io_receiver);
 
     let mut score = 0;
 
     let mut alpha = -50000;
     let mut beta  =  50000;
 
-    let mut current_depth = 1;
+    let mut current_depth: u8 = 1;
 
-    while current_depth <= depth {
-        if envir.stopping {break}
+    while depth == -1 || current_depth <= depth as u8 {
+        if envir.stopping { break }
         
-
-        print!("C: {}, D: {}", current_depth, depth);
-
         envir.follow_pv = true;
-        score = negamax(game, current_depth, alpha, beta, &mut envir);
+        score = negamax(game, current_depth as u8, alpha, beta, &mut envir);
 
         //Narrowing aspiration window
         if score <= alpha || score >= beta {
@@ -56,7 +54,9 @@ pub fn search(game: &mut Game, depth: u8) -> SearchResult {
         current_depth += 1;
     }
 
-    SearchResult::new(envir.pv_table[0][0], envir.nodes, score, current_depth - 1, envir.stopping)
+    print!("bestmove {}\n", envir.pv_table[0][0].to_uci());
+
+    SearchResult::new(envir.pv_table[0][0], envir.nodes, score, current_depth - 1, !envir.stopping)
 }
 
 fn enable_pv_scoring(moves: &MoveList, envir: &mut SearchEnv) {
@@ -303,8 +303,8 @@ pub fn score_move(game: &Game, cmove: Move, envir: &mut SearchEnv) -> i32 {
     }
 }
 
-pub struct SearchEnv {
-    pub nodes: u32,
+pub struct SearchEnv<'a> {
+    pub nodes: u64,
     pub ply: u8,
     pub killer_moves: [[Option<Move>; MAX_PLY]; 2],
     pub history_moves: [[i32; 64]; 12],
@@ -313,19 +313,14 @@ pub struct SearchEnv {
     pub follow_pv: bool,
     pub score_pv: bool,
     pub stopping: bool,
-    input: Receiver<String>
+    io_receiver: &'a IoWrapper,
+    start_time: SystemTime,
+    max_time: i64
 }
 
-impl SearchEnv {
-    pub fn new() -> Self {
-        let (tx, rx) = mpsc::channel::<String>();
-        thread::spawn(move || loop {
-            let mut buffer = String::new();
-            stdin().lock().read_line(&mut buffer).unwrap();
-            tx.send(buffer).unwrap_or_default();
-        });
-
-        Self {
+impl <'a>SearchEnv<'a> {
+    pub fn new(max_time: i64, io_receiver: &'a IoWrapper) -> Self {
+        Self{
             nodes: 0,
             ply: 0,
             killer_moves: [[None; 64]; 2],
@@ -335,7 +330,9 @@ impl SearchEnv {
             follow_pv: false,
             score_pv: false,
             stopping: false,
-            input: rx
+            io_receiver: io_receiver,
+            start_time: SystemTime::now(),
+            max_time: max_time,
         }
     }
 
@@ -352,43 +349,9 @@ impl SearchEnv {
     }
 
     pub fn poll_input(&mut self) {
-        match self.input.try_recv() {
-            Ok(input) => {
-                println!("          RECEIVED INPUT");
-                self.stopping = true;
-                match input.as_str() {
-                    "quit" => {}
-                    "stop" => {}
-                    _ => {}
-                }
-            },
-            _ => {}
+        if (self.max_time != -1 && self.start_time.elapsed().unwrap().as_millis() as i64 >= self.max_time) || self.io_receiver.try_read_line().is_some() {
+            self.stopping = true;
+            return;
         }
-    }
-}
-
-
-#[cfg(test)]
-mod search_tests {
-    use std::io::stdin;
-
-    use super::*;
-
-    #[test]
-    pub fn mvv_lva_test() {
-        sbench();
-        
-        //let game = Game::new_from_fen("r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9").unwrap();
-        //println!("{}", game.evaluate())
-    }
-
-    #[test]
-    pub fn negamax() {
-        let mut game = Game::new_from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1").unwrap();
-        let start = SystemTime::now();
-        let depth = 12;
-        let result = search(&mut game, depth);
-        let duration = start.elapsed().unwrap();
-        println!(" Found best move: {} for depth {}. Visited: {} nodes in {}ms", result.best_move.to_uci(), depth, result.nodes_visited, duration.as_millis());
     }
 }

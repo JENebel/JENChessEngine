@@ -1,5 +1,40 @@
+use std::{thread, io::stdin, sync::mpsc::{self, Receiver}};
+
 use crate::cmove::Move;
 
+pub struct IoWrapper {
+    receiver: Receiver<String>
+}
+
+impl IoWrapper {
+    pub fn init() -> Self {
+        Self { receiver: init_input_thread( )}
+    }
+
+    pub fn try_read_line(&self) -> Option<String> {
+        match self.receiver.try_recv() {
+            Ok(line) => Some(line.trim().to_string()),
+            Err(_) => None,
+        }
+    }
+
+    pub fn read_line(&self) -> String {
+        match self.receiver.recv() {
+            Ok(line) => line.trim().to_string(),
+            Err(_) => unreachable!(),
+        }
+    }
+}
+
+fn init_input_thread() -> Receiver<String> {
+    let (tx, rx) = mpsc::channel::<String>();
+    thread::spawn(move || loop {
+        let mut buffer = String::new();
+        stdin().read_line(&mut buffer).unwrap();
+        tx.send(buffer).unwrap_or_default();
+    });
+    rx
+}
 
 pub fn opposite_color(color: Color) -> Color {
     if color == Color::White { Color::Black } else { Color::White }
@@ -217,14 +252,14 @@ pub const MVV_LVA: [[i32; 12]; 12] = [
 
 pub struct SearchResult {
     pub best_move: Move,
-    pub nodes_visited: u32,
+    pub nodes_visited: u64,
     pub score: i32,
     pub depth: u8,
-    pub interrupted: bool
+    pub reached_max_ply: bool
 }
 
 impl SearchResult {
-    pub fn new(cmove: Move, nodes: u32, score: i32, depth: u8, interrupted: bool) -> Self {
-        Self { best_move: cmove, nodes_visited: nodes, score: score, depth: depth, interrupted }
+    pub fn new(cmove: Move, nodes: u64, score: i32, depth: u8, reached_max_ply: bool) -> Self {
+        Self { best_move: cmove, nodes_visited: nodes, score: score, depth: depth, reached_max_ply: reached_max_ply }
     }
 }

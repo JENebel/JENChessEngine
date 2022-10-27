@@ -11,7 +11,7 @@ mod perft;
 mod evaluation;
 
 use core::panic;
-use std::{io::{self, BufRead}, process, time::SystemTime};
+use std::{io::{self}, process, time::SystemTime, sync::mpsc::{self, Receiver}};
 
 use game::*;
 
@@ -27,10 +27,12 @@ use perft::*;
 use evaluation::*;
 
 fn main() {
+    let io_receiver = IoWrapper::init();
+
     let mut game = Game::new_from_start_pos();
-    let stdin = io::stdin();
-    for line in stdin.lock().lines() {
-        let input = line.unwrap().trim().to_string();
+    
+    loop {
+        let input = io_receiver.read_line();
         if input != "" {
             let mut split = input.split(" ").peekable();
             match split.next().unwrap().to_ascii_lowercase().as_str() {
@@ -39,31 +41,12 @@ fn main() {
                 "d" => { game.pretty_print(); }
                 "position" => {
                     if !split.peek().is_some() { continue; }
-                    let pos = split.next().unwrap().to_string();
-                    if pos == "startpos" {
-                        game = Game::new_from_start_pos();
-                    }
-                    else if pos == "fen" {
-                        if !split.peek().is_some() { continue; }
-                        let pos: String = input.chars().skip(8).skip_while(|c| c.is_whitespace()).skip(3).skip_while(|c| c.is_whitespace()).collect();
-                        let result = Game::new_from_fen(pos.as_str());
-                        match result {
-                            Some(g) => game = g,
-                            None => println!(" Illegal fen string")
-                        }
-                    }
-                    else { continue; }
-                    if split.peek().is_some() && split.next().unwrap() == "moves" {
-                        while split.peek().is_some() {
-                            let mov = split.next().unwrap();
-                            let parsed = game.parse_move(mov.to_string());
-                            if parsed.is_none() {
-                                panic!("Illegal move");
-                            }
-                            else {
-                                make_move(&mut game, &parsed.unwrap());
-                            }
-                        }
+                    let p = parse_position(input.split_at(9).1.to_string());
+
+                    if p.is_none() {
+                        println!(" Illegal fen string")
+                    } else {
+                        game = p.unwrap()
                     }
                 },
                 "perft" => {
@@ -101,30 +84,14 @@ fn main() {
                 "isready" => print!("readyok\n"),
                 "go" => {
                     if split.peek().is_none() { continue; }
-                    let com = split.next().unwrap();
-                    let result: SearchResult;
-                    match com {
-                        "depth" => {
-                            if split.peek().is_none() { continue; }
-                            let depth_str = split.next().unwrap();
-                            let depth = depth_str.parse::<u16>();
-                            if depth.is_err() { continue; }
-                            result = search(&mut game, depth.unwrap() as u8);
-                        },
-                        "random" => {
-                            result = search_random(&mut game);
-                        },
-                        _ => result = search(&mut game, 9)
-                    }
-                    print!("info score cp {} depth {} nodes {}\n", result.score, result.depth, result.nodes_visited);
-                    print!("bestmove {}\n", result.best_move.to_uci());
+                    parse_go(input.split_at(2).1.to_string(), &mut game, &io_receiver)
                 },
                 "eval" => {
                     let result = evaluate(&game);
                     println!(" {}", result);
                 },
                 "sbench" => {
-                    sbench()
+                    sbench(&io_receiver)
                 },
 
                 _ => println!(" {}", " Unknown command")
@@ -133,7 +100,129 @@ fn main() {
     }
 }
 
-pub fn sbench() {
+fn parse_position(args: String) -> Option<Game> {
+    let mut split = args.split(" ").peekable();
+    let pos = split.next().unwrap().to_string();
+    let mut game;
+    if pos == "startpos" {
+        game = Game::new_from_start_pos();
+    }
+    else if pos == "fen" {
+        if !split.peek().is_some() { return None; }
+        let pos: String = args.chars().skip(8).skip_while(|c| c.is_whitespace()).skip(3).skip_while(|c| c.is_whitespace()).collect();
+        let result = Game::new_from_fen(pos.as_str());
+        match result {
+            Some(g) => game = g,
+            None => return None
+        }
+    }
+    else {println!("Lort: {}", pos); return None; }
+
+    if split.peek().is_some() && split.next().unwrap() == "moves" {
+        while !split.peek().is_none() {
+            let mov = split.next().unwrap();
+            let parsed = game.parse_move(mov.to_string());
+            if parsed.is_none() {
+                panic!("Illegal move");
+            }
+            else {
+                make_move(&mut game, &parsed.unwrap());
+            }
+        }
+    }
+
+    Some(game)
+}
+
+fn parse_go(args: String, game: &mut Game, io_receiver: &IoWrapper){
+    let mut split = args.split(" ").peekable();
+
+    //Load arguments
+    let mut inc = 0;
+    let mut time = -1;
+    let mut moves_to_go = 30;
+    let mut move_time = -1;
+    let mut depth = -1;
+
+    while split.peek().is_some() {
+        let arg = split.next().unwrap();
+        if arg == "" {
+            continue;
+        }
+        match arg {
+            "binc" => if game.active_player == Color::Black {
+                let t = split.next().unwrap();
+                inc = t.parse::<i64>().unwrap(); 
+                } else {
+                    split.next();
+            },
+            "winc" => if game.active_player == Color::White {
+                let t = split.next().unwrap();
+                inc = t.parse::<i64>().unwrap(); 
+                } else {
+                    split.next();
+            },
+            "btime" => if game.active_player == Color::Black {
+                let t = split.next().unwrap();
+                time = t.parse::<i64>().unwrap();
+                } else {
+                    split.next();
+            },
+            "wtime" => if game.active_player == Color::White {
+                let t = split.next().unwrap();
+                time = t.parse::<i64>().unwrap(); 
+                } else {
+                    split.next();
+            },
+            "movestogo" => if game.active_player == Color::White {
+                let t = split.next().unwrap();
+                moves_to_go = t.parse::<i64>().unwrap(); 
+            },
+            "move_time" => if game.active_player == Color::White {
+                let t = split.next().unwrap();
+                move_time = t.parse::<i64>().unwrap(); 
+            },
+            //Fixed depth
+            "depth" => {
+                if split.peek().is_none() { return; }
+                let depth_str = split.next().unwrap();
+                let d = depth_str.parse::<i8>();
+                if d.is_err() { return; }
+                depth = d.unwrap()
+            },
+            "infinite" => {},
+            //Random mover
+            "random" => {
+                search_random(game);
+                return;
+            },
+            
+            _ => {
+                println!("Illegal 'go' command: '{}'", arg);
+            }
+        }
+    }
+
+    //Decide time
+    if move_time != -1 {
+        time = move_time
+    } else if time != -1 {
+        time /= moves_to_go;
+        time += -50 + inc;
+    }
+
+    //Run search
+    search(game, depth, time, &io_receiver);
+}
+
+pub fn read_line() -> String {
+    let stdin = io::stdin();
+    let mut input: String = String::new(); 
+    stdin.read_line(&mut input).expect("Could not read line");
+    input.trim().to_string()
+}
+
+pub fn sbench(io_receiver: &IoWrapper) {
     let poss = [
 Game::new_from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1").unwrap(),
         Game::new_from_fen("rnbqkb1r/pp1p1pPp/8/2p1pP2/1P1P4/3P3P/P1P1P3/RNBQKBNR w KQkq e6 0 1").unwrap(),
@@ -150,13 +239,12 @@ Game::new_from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQ
     let mut nodes = 0;
     for mut p in poss {
         //p.pretty_print();
-        let result = search(&mut p, depth);
+        let result = search(&mut p, depth, -1, &io_receiver);
         nodes += result.nodes_visited;
-        if result.interrupted {
-            println!("Interrupted");
-            return
+        if !result.reached_max_ply {
+            println!("Cancelled!");
+            return;
         }
-        println!(" Best:{}\t Nodes: {}", result.best_move.to_uci(), result.nodes_visited); 
     }
     let duration = start.elapsed().unwrap();
     println!(" RESULT: Depth: {}\t Nodes: {}\t Time: {}ms", depth, nodes, duration.as_millis()); 

@@ -60,6 +60,7 @@ pub fn make_move(game: &mut Game, cmove: &Move) -> bool {
     if game.is_in_check(game.active_player) {
         return false
     }
+    
 
     if game.active_player == Color::White {
         game.white_occupancies.unset_bit(from_square);
