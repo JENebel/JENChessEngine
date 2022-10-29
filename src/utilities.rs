@@ -337,11 +337,12 @@ pub struct SearchResult {
     pub nodes_visited: u64,
     pub score: i32,
     pub depth: u8,
-    pub reached_max_ply: bool
+    pub reached_max_ply: bool,
+    pub tt_hits: u32
 }
 
 impl SearchResult {
-    pub fn new(cmove: Move, nodes: u64, score: i32, depth: u8, reached_max_ply: bool) -> Self {
-        Self { best_move: cmove, nodes_visited: nodes, score: score, depth: depth, reached_max_ply: reached_max_ply }
+    pub fn new(cmove: Move, nodes: u64, score: i32, depth: u8, reached_max_ply: bool, tt_hits: u32) -> Self {
+        Self { best_move: cmove, nodes_visited: nodes, score: score, depth: depth, reached_max_ply: reached_max_ply, tt_hits: tt_hits }
     }
 }

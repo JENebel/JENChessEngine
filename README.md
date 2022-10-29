@@ -23,6 +23,8 @@ It has the following features:
   * Late Move Reduction
   * PV search
   * Narrow aspiration window
+  * Iterative deepening
+  * Simple transposition table
 * Evaluation
   * Material values
   * Piece-Square tables

@@ -52,7 +52,7 @@ impl Game {
         println!("\tFull moves: {}",    self.full_moves);
         print!("   Enpassant:  {}",     SQUARE_STRINGS[self.enpassant_square as usize]);
         println!("\tHalf moves: {}",    self.half_moves);
-        println!("   Castling:   {}", self.castling_ability_string());
+        print!("   Castling:   {}  ", self.castling_ability_string());
         println!("\tZobrist:   {:#0x}\n", self.make_zobrist_hash());
     }
 
@@ -219,13 +219,13 @@ impl Game {
 
 #[cfg(test)]
 mod make_tests {
-    use super::*;
+    //use super::*;
 
     #[test]
     pub fn zobrist() {
-        let mut game = Game::new_from_fen("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10").unwrap();
+        //let mut game = Game::new_from_fen("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10").unwrap();
 
 
-        debug_perft(&mut game, 5);
+        //debug_perft(&mut game, 5);
     }
 }

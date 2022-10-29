@@ -26,12 +26,14 @@ use move_generator::*;
 use make_move::*;
 use perft::*;
 use evaluation::*;
-use transposition_table::*;
+use transposition_table::*; 
 
 fn main() {
     let io_receiver = IoWrapper::init();
 
     let mut game = Game::new_from_start_pos();
+
+    let mut tt = TranspositionTable::new();
     
     loop {
         let input = io_receiver.read_line();
@@ -82,11 +84,13 @@ fn main() {
                     print!("id author Joachim Enggård Nebel\n");
                     print!("uciok\n");
                 },
-                "ucinewgame" => { },
+                "ucinewgame" | "cleartt" => {
+                    tt.clear();
+                },
                 "isready" => print!("readyok\n"),
                 "go" => {
                     if split.peek().is_none() { continue; }
-                    parse_go(input.split_at(2).1.to_string(), &mut game, &io_receiver)
+                    parse_go(input.split_at(2).1.to_string(), &mut game, &io_receiver, &mut tt)
                 },
                 "eval" => {
                     let result = evaluate(&game);
@@ -103,24 +107,34 @@ fn main() {
 }
 
 fn parse_position(args: String) -> Option<Game> {
-    let mut split = args.split(" ").peekable();
-    let pos = split.next().unwrap().to_string();
+    let pos = args.split(" ").next().unwrap().to_string();
+    let rest: String;
     let mut game;
     if pos == "startpos" {
         game = Game::new_from_start_pos();
+
+        rest = args.chars().skip(9).collect();
     }
     else if pos == "fen" {
-        if !split.peek().is_some() { return None; }
-        let pos: String = args.chars().skip(8).skip_while(|c| c.is_whitespace()).skip(3).skip_while(|c| c.is_whitespace()).collect();
-        let result = Game::new_from_fen(pos.as_str());
+        if args.len() < 5 {
+            return None;
+        }
+        let fen: String = args.chars().skip(4).take_while(|c| *c != 'm').collect();
+
+        rest = args.chars().skip(4 + fen.len()).collect();
+
+        let result = Game::new_from_fen(fen.as_str());
         match result {
             Some(g) => game = g,
             None => return None
         }
     }
-    else {println!("Lort: {}", pos); return None; }
+    else { return None; }
 
-    if split.peek().is_some() && split.next().unwrap() == "moves" {
+    let mut split = rest.split(" ").peekable();
+
+    if *split.peek().unwrap() == "moves" {
+        split.next();
         while !split.peek().is_none() {
             let mov = split.next().unwrap();
             let parsed = game.parse_move(mov.to_string());
@@ -136,7 +150,7 @@ fn parse_position(args: String) -> Option<Game> {
     Some(game)
 }
 
-fn parse_go(args: String, game: &mut Game, io_receiver: &IoWrapper){
+fn parse_go(args: String, game: &mut Game, io_receiver: &IoWrapper, tt: &mut TranspositionTable){
     let mut split = args.split(" ").peekable();
 
     //Load arguments
@@ -214,7 +228,7 @@ fn parse_go(args: String, game: &mut Game, io_receiver: &IoWrapper){
     }
 
     //Run search
-    search(game, depth, time, &io_receiver);
+    search(game, depth, time, &io_receiver, tt);
 }
 
 pub fn read_line() -> String {
@@ -226,9 +240,9 @@ pub fn read_line() -> String {
 
 pub fn sbench(io_receiver: &IoWrapper) {
     let poss = [
-Game::new_from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1").unwrap(),
-        Game::new_from_fen("rnbqkb1r/pp1p1pPp/8/2p1pP2/1P1P4/3P3P/P1P1P3/RNBQKBNR w KQkq e6 0 1").unwrap(),
-    Game::new_from_fen("r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9 ").unwrap(),
+        Game::new_from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1").unwrap(),    //Tricky position
+        Game::new_from_fen("rnbqkb1r/pp1p1pPp/8/2p1pP2/1P1P4/3P3P/P1P1P3/RNBQKBNR w KQkq e6 0 1").unwrap(),     //killer position
+        Game::new_from_fen("r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9").unwrap(),    //CMK position
         Game::new_from_fen("6k1/3q1pp1/pp5p/1r5n/8/1P3PP1/PQ4BP/2R3K1 w - - 0 1").unwrap(),
         Game::new_from_fen("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 10").unwrap(),
         Game::new_from_fen("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1").unwrap(),
@@ -238,18 +252,20 @@ Game::new_from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQ
     ];
     let start = SystemTime::now();
     let depth = 10;
+    let mut tt_hits = 0;
     let mut nodes = 0;
     for mut p in poss {
         //p.pretty_print();
-        let result = search(&mut p, depth, -1, &io_receiver);
+        let result = search_bare(&mut p, depth, -1, &io_receiver);
         nodes += result.nodes_visited;
+        tt_hits += result.tt_hits;
         if !result.reached_max_ply {
             println!("Cancelled!");
             return;
         }
     }
     let duration = start.elapsed().unwrap();
-    println!(" RESULT: Depth: {}\t Nodes: {}\t Time: {}ms", depth, nodes, duration.as_millis()); 
+    println!(" RESULT: Depth: {}\t Nodes: {}\t TT hits: {}\tTime: {}ms", depth, nodes, tt_hits, duration.as_millis()); 
 }
 
 fn go_perft(depth: u8, mut game: Game, detail: bool) {

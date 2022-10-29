@@ -42,29 +42,3 @@ pub fn perft(game: &mut Game, depth: u8, print: bool) -> u128 {
         }).sum()
     }
 }
-
-pub fn debug_perft(game: &mut Game, depth: u8) -> u128 {
-    let moves = generate_moves(game, MoveTypes::All);
-
-    if depth == 1 {
-        return moves.bulk_count(game) as u128;
-    }
-
-    moves.iter().map(|m| {
-        let mut copy = *game;
-
-        if make_move(&mut copy, &m) {
-            let r = debug_perft(&mut copy, depth - 1);
-
-            if copy.zobrist_hash != copy.make_zobrist_hash() {
-                game.pretty_print();
-                copy.pretty_print();
-                println!("{}\t{:#0x}", m.to_uci(), copy.zobrist_hash);
-                process::exit(0);
-            }
-
-            r
-        }
-        else { 0 }
-    }).sum()
-}
