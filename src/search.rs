@@ -17,14 +17,10 @@ pub fn search_random(game: &mut Game) {
     print!("bestmove {}\n", moves.get(rand).to_uci());
 }
 
-pub fn search_bare(game: &mut Game, depth: i8, max_time: i64, io_receiver: &IoWrapper) -> SearchResult {
-    let mut tt = TranspositionTable::new();
-    search(game, depth, max_time, io_receiver, &mut tt)
-}
-
 //Start a search, max_time = -1 for no limit
-pub fn search(game: &mut Game, depth: i8, max_time: i64, io_receiver: &IoWrapper, tt: &mut TranspositionTable) -> SearchResult {
-    let mut envir = SearchEnv::new(max_time, io_receiver, tt);
+pub fn search(game: &mut Game, depth: i8, max_time: i64, io_receiver: &IoWrapper, tt: &mut TranspositionTable, rep_table: &mut RepetitionTable) -> SearchResult {
+
+    let mut envir = SearchEnv::new(max_time, io_receiver, tt, rep_table);
 
     let mut score = 0;
 
@@ -35,11 +31,11 @@ pub fn search(game: &mut Game, depth: i8, max_time: i64, io_receiver: &IoWrapper
     let max_depth = if depth == -1 { MAX_PLY as u8 } else { depth as u8 };
 
     while current_depth <= max_depth as u8 {
-        if envir.stopping { break }
-        
         envir.follow_pv = true;
 
         score = negamax(game, current_depth as u8, alpha, beta, &mut envir);
+
+        if envir.stopping { break }
 
         //Narrowing aspiration window
         if score <= alpha || score >= beta {
@@ -57,7 +53,7 @@ pub fn search(game: &mut Game, depth: i8, max_time: i64, io_receiver: &IoWrapper
         if score >= -MATE_VALUE && score < -MATE_BOUND {
             print!("info score mate {} depth {} nodes {} time {} pv ", -(score + MATE_VALUE) / 2 - 1, current_depth, envir.nodes, envir.start_time.elapsed().unwrap().as_millis());
         }
-        if score <= MATE_VALUE && score > MATE_BOUND {
+        else if score <= MATE_VALUE && score > MATE_BOUND {
             print!("info score mate {} depth {} nodes {} time {} pv ", (MATE_VALUE - score) / 2 + 1, current_depth, envir.nodes, envir.start_time.elapsed().unwrap().as_millis());
         }
         else {
@@ -102,26 +98,25 @@ fn negamax(game: &mut Game, depth: u8, alpha: i32, beta: i32, envir: &mut Search
         }
     }
 
+    envir.pv_lengths[envir.ply as usize] = envir.ply as usize;
+
+    if envir.ply > 0 && envir.repetition_table.is_now_in_threefold_repetition() {
+        return 0;
+    }
+
     //Dont't go on if reached max ply
     if envir.ply >= MAX_PLY as u8 - 1  {
         return evaluate(&game);
     }
 
-    envir.pv_lengths[envir.ply as usize] = envir.ply as usize;
-
     if envir.nodes & INPUT_POLL_INTERVAL == 0 {
         envir.poll_input()
     }
 
-    if depth == 0 {
+    if depth == 0 || game.half_moves == 100 {
         //return evaluate(game)
         return quiescence(game, alpha, beta, envir);
     }
-
-    //50 move rule
-    /*if game.half_moves >= 50 {
-        //return 0
-    }*/
 
     let mut hash_flag = HashFlag::Alpha;
 
@@ -182,12 +177,15 @@ fn negamax(game: &mut Game, depth: u8, alpha: i32, beta: i32, envir: &mut Search
 
         envir.ply += 1;
 
-        if !make_move(&mut copy, &m) { 
+        if !make_search_move(&mut copy, &m, &mut envir.repetition_table) { 
             envir.ply -= 1; 
+            
             continue;
         }
 
         legal_moves += 1;
+
+        envir.repetition_table.move_back();
 
         if moves_searched == 0 {
             //Full PV Search
@@ -222,9 +220,9 @@ fn negamax(game: &mut Game, depth: u8, alpha: i32, beta: i32, envir: &mut Search
 
         envir.ply -= 1;
 
-        if envir.stopping { return 0 }
-
         moves_searched += 1;
+
+        if envir.stopping { return 0 }
 
         if score > temp_alpha {
             //Insert PV node
@@ -283,7 +281,7 @@ fn quiescence(game: &mut Game, alpha: i32, beta: i32, envir: &mut SearchEnv) -> 
     let eval = evaluate(&game);
 
     //Dont't go on if reached max ply
-    if envir.ply > MAX_PLY as u8 - 1 {
+    if envir.ply > MAX_PLY as u8 - 1 || game.half_moves == 100 {
         return eval;
     }
 
@@ -304,7 +302,7 @@ fn quiescence(game: &mut Game, alpha: i32, beta: i32, envir: &mut SearchEnv) -> 
         let m = moves.get(i);
 
         let mut copy = game.clone();
-        if !make_move(&mut copy, &m) {
+        if !make_search_move(&mut copy, &m, &mut envir.repetition_table) {
             continue;
         }
         
@@ -313,6 +311,8 @@ fn quiescence(game: &mut Game, alpha: i32, beta: i32, envir: &mut SearchEnv) -> 
         let score = -quiescence(&mut copy, -beta, -temp_alpha, envir);
 
         envir.ply -= 1;
+
+        envir.repetition_table.move_back();
 
         if score >= beta {
             return beta;
@@ -387,11 +387,12 @@ pub struct SearchEnv<'a> {
     pub start_time: SystemTime,
     max_time: i64,
     transposition_table: &'a mut TranspositionTable,
-    pub tt_hits: u32
+    pub tt_hits: u32,
+    pub repetition_table: &'a mut RepetitionTable,
 }
 
 impl <'a>SearchEnv<'a> {
-    pub fn new(max_time: i64, io_receiver: &'a IoWrapper, tt: &'a mut TranspositionTable) -> Self {
+    pub fn new(max_time: i64, io_receiver: &'a IoWrapper, tt: &'a mut TranspositionTable, rep_table: &'a mut RepetitionTable) -> Self {
         Self{
             nodes: 0,
             ply: 0,
@@ -406,7 +407,8 @@ impl <'a>SearchEnv<'a> {
             start_time: SystemTime::now(),
             max_time: max_time,
             transposition_table: tt,
-            tt_hits: 0
+            tt_hits: 0,
+            repetition_table: rep_table
         }
     }
 

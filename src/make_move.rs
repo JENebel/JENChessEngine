@@ -1,6 +1,10 @@
 use super::*;
 
 pub fn make_move(game: &mut Game, cmove: &Move) -> bool {
+    make_search_move(game, cmove, &mut RepetitionTable::new())
+}
+
+pub fn make_search_move(game: &mut Game, cmove: &Move, rep_table: &mut RepetitionTable) -> bool {
 
     let from_square = cmove.from_square();
     let to_square   = cmove.to_square();
@@ -174,6 +178,8 @@ pub fn make_move(game: &mut Game, cmove: &Move) -> bool {
 
     game.active_player = opposite_color(game.active_player);
     game.zobrist_hash ^= SIDE_KEY;
+
+    rep_table.insert(game.zobrist_hash);
 
     true
 }

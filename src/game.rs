@@ -15,7 +15,7 @@ pub struct Game {
 
     pub full_moves: u16,
     pub half_moves: u8,
-    pub zobrist_hash: u64
+    pub zobrist_hash: u64,
 }
 
 impl Game {

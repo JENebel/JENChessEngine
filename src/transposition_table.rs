@@ -1,7 +1,7 @@
 use super::*;
 
 
-const TT_SIZE: usize = 0x16_00000 / std::mem::size_of::<TranspositionTable>(); // (byte size of TT) / (Size of TT entry)
+const TT_SIZE: usize = 0x128_00000 / std::mem::size_of::<TranspositionTable>(); // (byte size of TT) / (Size of TT entry)
 pub const UNKNOWN_SCORE: i32 = i32::MIN;
 
 #[derive(PartialEq)]
@@ -107,6 +107,6 @@ mod tt_tests {
     pub fn tt () {
         let mut game = Game::new_from_fen("").unwrap();
         game.pretty_print();
-        search_bare(&mut game, 4, -1, &IoWrapper::init());
+        search(&mut game, 4, -1, &IoWrapper::init(), &mut TranspositionTable::new(), &mut RepetitionTable::new());
     }
 }

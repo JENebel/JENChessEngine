@@ -10,6 +10,7 @@ mod make_move;
 mod perft;
 mod evaluation;
 mod transposition_table;
+mod repetition_table;
 
 use core::panic;
 use std::{io::{self}, process, time::SystemTime};
@@ -26,7 +27,8 @@ use move_generator::*;
 use make_move::*;
 use perft::*;
 use evaluation::*;
-use transposition_table::*; 
+use transposition_table::*;
+use repetition_table::*;
 
 fn main() {
     let io_receiver = IoWrapper::init();
@@ -34,6 +36,8 @@ fn main() {
     let mut game = Game::new_from_start_pos();
 
     let mut tt = TranspositionTable::new();
+
+    let mut repetition_table = RepetitionTable::new();
     
     loop {
         let input = io_receiver.read_line();
@@ -45,10 +49,11 @@ fn main() {
                 "d" => { game.pretty_print(); }
                 "position" => {
                     if !split.peek().is_some() { continue; }
-                    let p = parse_position(input.split_at(9).1.to_string());
+                    repetition_table.clear();
+                    let p = parse_position(input.split_at(9).1.to_string(), &mut repetition_table);
 
                     if p.is_none() {
-                        println!(" Illegal fen string")
+                        panic!(" Illegal fen string");
                     } else {
                         game = p.unwrap();
                     }
@@ -85,12 +90,13 @@ fn main() {
                     print!("uciok\n");
                 },
                 "ucinewgame" | "cleartt" => {
+                    repetition_table.clear();
                     tt.clear();
                 },
                 "isready" => print!("readyok\n"),
                 "go" => {
                     if split.peek().is_none() { continue; }
-                    parse_go(input.split_at(2).1.to_string(), &mut game, &io_receiver, &mut tt)
+                    parse_go(input.split_at(2).1.to_string(), &mut game, &io_receiver, &mut tt, &mut repetition_table)
                 },
                 "eval" => {
                     let result = evaluate(&game);
@@ -99,6 +105,18 @@ fn main() {
                 "sbench" => {
                     sbench(&io_receiver)
                 },
+                "move" => {
+                    while !split.peek().is_none() {
+                        let mov = split.next().unwrap();
+                        let parsed = game.parse_move(mov.to_string());
+                        if parsed.is_none() {
+                            panic!("Illegal move");
+                        }
+                        else {
+                            make_search_move(&mut game, &parsed.unwrap(), &mut repetition_table);
+                        }
+                    }
+                },
 
                 _ => println!(" {}", " Unknown command")
             }
@@ -106,7 +124,7 @@ fn main() {
     }
 }
 
-fn parse_position(args: String) -> Option<Game> {
+fn parse_position(args: String, rep_table: &mut RepetitionTable) -> Option<Game> {
     let pos = args.split(" ").next().unwrap().to_string();
     let rest: String;
     let mut game;
@@ -142,7 +160,7 @@ fn parse_position(args: String) -> Option<Game> {
                 panic!("Illegal move");
             }
             else {
-                make_move(&mut game, &parsed.unwrap());
+                make_search_move(&mut game, &parsed.unwrap(), rep_table);
             }
         }
     }
@@ -150,7 +168,7 @@ fn parse_position(args: String) -> Option<Game> {
     Some(game)
 }
 
-fn parse_go(args: String, game: &mut Game, io_receiver: &IoWrapper, tt: &mut TranspositionTable){
+fn parse_go(args: String, game: &mut Game, io_receiver: &IoWrapper, tt: &mut TranspositionTable, rep_table: &mut RepetitionTable){
     let mut split = args.split(" ").peekable();
 
     //Load arguments
@@ -228,7 +246,7 @@ fn parse_go(args: String, game: &mut Game, io_receiver: &IoWrapper, tt: &mut Tra
     }
 
     //Run search
-    search(game, depth, time, &io_receiver, tt);
+    search(game, depth, time, &io_receiver, tt, rep_table);
 }
 
 pub fn read_line() -> String {
@@ -256,7 +274,7 @@ pub fn sbench(io_receiver: &IoWrapper) {
     let mut nodes = 0;
     for mut p in poss {
         //p.pretty_print();
-        let result = search_bare(&mut p, depth, -1, &io_receiver);
+        let result = search(&mut p, depth, -1, &io_receiver, &mut TranspositionTable::new(), &mut RepetitionTable::new());
         nodes += result.nodes_visited;
         tt_hits += result.tt_hits;
         if !result.reached_max_ply {
