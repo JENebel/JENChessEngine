@@ -242,7 +242,13 @@ fn parse_go(args: String, game: &mut Game, io_receiver: &IoWrapper, tt: &mut Tra
         time = move_time
     } else if time != -1 {
         time /= moves_to_go;
-        time += -50 + inc;
+
+        // Should prevent illegal moves on tight time budgets
+        if time > 1500 {
+            time -= 50
+        }
+
+        time += inc;
     }
 
     //Run search

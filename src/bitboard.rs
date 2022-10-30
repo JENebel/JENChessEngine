@@ -80,10 +80,15 @@ impl Bitboard {
         Self { bits: self.bits & other.bits }
     }
 
-    /*pub fn or(&self, other: Bitboard) -> Self {
+    pub fn pop_count(&mut self) -> u32 {
+        self.bits.count_ones()
+    }
+
+    pub fn or(&self, other: Bitboard) -> Self {
         Self { bits: self.bits | other.bits }
     }
 
+    /*
     pub fn xor(&self, other: Bitboard) -> Self {
         Self { bits: self.bits ^ other.bits }
     }*/

@@ -1,7 +1,6 @@
 use super::*;
 
-
-const TT_SIZE: usize = 0x128_00000 / std::mem::size_of::<TranspositionTable>(); // (byte size of TT) / (Size of TT entry)
+pub const TT_SIZE: usize =  (32 * 1_048_576) / std::mem::size_of::<TranspositionTableEntry>();
 pub const UNKNOWN_SCORE: i32 = i32::MIN;
 
 #[derive(PartialEq)]
@@ -25,7 +24,7 @@ pub enum TranspositionTableEntry {
 }
 
 pub struct TranspositionTable {
-    table: Vec<TranspositionTableEntry>
+    table: Box<[TranspositionTableEntry]>
 }
 
 impl TranspositionTableEntry {
@@ -42,7 +41,7 @@ impl TranspositionTableEntry {
 
 impl TranspositionTable {
     pub fn new() -> Self {
-        Self{table: vec![TranspositionTableEntry::Empty; TT_SIZE]}
+        Self{table: vec![TranspositionTableEntry::Empty; TT_SIZE].into_boxed_slice()}
     }
 
     pub fn record(&mut self, hash: u64, score: i32, depth: u8, flag: HashFlag, ply: u8) {
