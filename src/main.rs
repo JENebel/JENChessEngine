@@ -50,7 +50,7 @@ fn main() {
                     if p.is_none() {
                         println!(" Illegal fen string")
                     } else {
-                        game = p.unwrap()
+                        game = p.unwrap();
                     }
                 },
                 "perft" => {
@@ -81,7 +81,7 @@ fn main() {
                 },
                 "uci" => {
                     print!("id name JENCE\n");
-                    print!("id author Joachim Enggård Nebel\n");
+                    print!("id author Joachim Enggaard Nebel\n");
                     print!("uciok\n");
                 },
                 "ucinewgame" | "cleartt" => {
