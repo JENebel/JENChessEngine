@@ -3,7 +3,7 @@ or JENCE
 
 A chess engine written in rust.
 
-It is decently strong and performant but currently lacks an opening book, is incompetent in endgames and has an insufficient evaluation function.
+Current ELO is around 2000.
 
 It has the following features:
 * Backbone
@@ -25,6 +25,10 @@ It has the following features:
   * Narrow aspiration window
   * Iterative deepening
   * Simple transposition table
+  * Threefold repitition detection
 * Evaluation
   * Material values
   * Piece-Square tables
+  * Simple Pawn structure bonuses/penalties
+  * Simple piece mobility
+  * Simple king safety
