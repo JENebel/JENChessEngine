@@ -5,6 +5,8 @@ A chess engine written in rust.
 
 Current ELO is around 2000.
 
+If you are lucky it is online and accepting challenges on lichess: https://lichess.org/@/JENCE
+
 It has the following features:
 * Backbone
   * Bitboards
