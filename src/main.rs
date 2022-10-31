@@ -208,11 +208,11 @@ fn parse_go(args: String, game: &mut Game, io_receiver: &IoWrapper, tt: &mut Tra
                 } else {
                     split.next();
             },
-            "movestogo" => if game.active_player == Color::White {
+            "movestogo" => {
                 let t = split.next().unwrap();
                 moves_to_go = t.parse::<i64>().unwrap(); 
             },
-            "move_time" => if game.active_player == Color::White {
+            "movetime" => {
                 let t = split.next().unwrap();
                 move_time = t.parse::<i64>().unwrap(); 
             },
