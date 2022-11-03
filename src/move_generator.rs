@@ -1,382 +1,129 @@
 use super::*;
 
+///The maximum length of the moveList. Array is initialized to this
+const MOVE_LIST_SIZE: usize = 256; //Maybe 128?
+
 #[derive(PartialEq)]
 pub enum MoveTypes {
     All,
-    Quiescence
+    Captures
 }
 
-#[inline(always)]
-pub fn generate_moves(game: &mut Game, move_types: MoveTypes) -> MoveList {
-    let mut moves = MoveList::new();
-    let mut from_sq: u8;
-    let mut to_sq:   u8;
+pub struct MoveGenerator<'a> {
+    pos: &'a mut Position,
+    moves: [Move; MOVE_LIST_SIZE],
+    insert_index: usize,
+    extract_index: usize,
+    move_types: MoveTypes,
+    phase: MoveTypes
+    //The current phase of generation
+}
 
-    let mut attacks: Bitboard;
-    let mut quiet: Bitboard;
+impl <'a>MoveGenerator<'a> {
+    ///Initializes the generator to a position
+    pub fn initialize(pos: &'a mut Position, move_types: MoveTypes) -> Self {
+        Self {
+            pos: pos,
+            moves: [NULL_MOVE; MOVE_LIST_SIZE],
+            insert_index: 0,
+            extract_index: 0,
+            move_types,
+            phase: MoveTypes::Captures
+        }
+    }
 
-    let mut pawn_bitboard;
-    let mut rook_bitboard;
-    let mut knight_bitboard;
-    let mut bishop_bitboard;
-    let mut queen_bitboard;
-    let mut king_bitboard;
+    ///Generates all moves instantly, and returns them
+    pub fn collect(&mut self) -> Vec<Move>{
+        todo!()
+    }
 
-    let opponent_occupancies: Bitboard;
+    ///Indicates whether the move generator still contains moves
+    pub fn has_next(&mut self) -> bool {
+        todo!()
+    }
 
-    let rook;
-    let knight;
-    let bishop;
-    let queen;
-    let king;
-
-    //Color specific
-    //WHITE
-    if game.active_player == Color::White {
-        opponent_occupancies = game.black_occupancies;
-        pawn_bitboard =     game.get_piece_bitboard(Piece::WhitePawn);
-        rook_bitboard =     game.get_piece_bitboard(Piece::WhiteRook);
-        knight_bitboard =   game.get_piece_bitboard(Piece::WhiteKnight);
-        bishop_bitboard =   game.get_piece_bitboard(Piece::WhiteBishop);
-        queen_bitboard =    game.get_piece_bitboard(Piece::WhiteQueen);
-        king_bitboard =     game.get_piece_bitboard(Piece::WhiteKing);
-
-        rook =   Piece::WhiteRook as u8;
-        knight = Piece::WhiteKnight as u8;
-        bishop = Piece::WhiteBishop as u8;
-        queen =  Piece::WhiteQueen as u8;
-        king =   Piece::WhiteKing as u8;
-
-        //Pawn moves
-        while !pawn_bitboard.is_empty() {
-            from_sq = pawn_bitboard.extract_bit();
-            to_sq = (from_sq as i8 - 8) as u8;
-            //Quiet
-            if move_types == MoveTypes::All && !game.all_occupancies.get_bit(to_sq) {
-                //to_sq is empty
-                if to_sq >= 8 {
-                    //Quiet move
-                    moves.add_move(Move::new(from_sq, to_sq, Piece::WhitePawn as u8, Piece::None as u8, false, false, false, false));
-
-                    //Double push
-                    to_sq = (to_sq as i8 - 8) as u8;
-                    if !game.all_occupancies.get_bit(to_sq) && from_sq / 8 == 6 {
-                        moves.add_move(Move::new(from_sq, to_sq, Piece::WhitePawn as u8, Piece::None as u8, false, true, false, false));
+    ///Gets next move, best first. Dynamically generates moves in phases lazily sorted. Returns NULL_MOVE, when empty
+    pub fn get_next_move(&mut self, sort: bool) -> Move {
+        //We have run out
+        if self.extract_index >= self.insert_index {
+            match self.phase {
+                MoveTypes::All => return NULL_MOVE,
+                MoveTypes::Captures => { 
+                    //Iterate phase or finish generation depending on what moves are wanted
+                    if self.move_types == MoveTypes::All {
+                        self.phase = MoveTypes::All
+                    } else {
+                        return NULL_MOVE
                     }
                 }
-                //Promotions
-                else {
-                    moves.add_move(Move::new(from_sq, to_sq, Piece::WhitePawn as u8, Piece::WhiteQueen as u8,  false, false, false, false));
-                    moves.add_move(Move::new(from_sq, to_sq, Piece::WhitePawn as u8, Piece::WhiteKnight as u8, false, false, false, false));
-                    moves.add_move(Move::new(from_sq, to_sq, Piece::WhitePawn as u8, Piece::WhiteRook as u8,   false, false, false, false));
-                    moves.add_move(Move::new(from_sq, to_sq, Piece::WhitePawn as u8, Piece::WhiteBishop as u8, false, false, false, false))
+            }
+
+            //Generate more moves
+            match self.phase {
+                MoveTypes::All => self.generate_non_captures(),
+                MoveTypes::Captures => self.generate_captures(),
+            }
+        }
+
+        let best;
+
+        //Sort if wanted
+        if sort {
+            //Find move
+            let mut best_index = self.extract_index;
+            let mut best_score = self.moves[best_index].score;
+            
+            for i in (self.extract_index + 1)..self.insert_index {
+                if self.moves[i].score > best_score {
+                    best_score = self.moves[i].score;
+                    best_index = i;
                 }
             }
 
-            //Captures
-            attacks = get_pawn_attack_table(from_sq, Color::White);
-
-            //enpassant
-            if game.enpassant_square != Square::None && !attacks.and(Bitboard::from_u64(1 << game.enpassant_square as u8)).is_empty(){
-                moves.add_move(Move::new(from_sq, game.enpassant_square as u8, Piece::WhitePawn as u8, Piece::None as u8, true, false, true, false));
-            }
-
-            //Overlap with opponent occupancies
-            attacks = attacks.and(game.black_occupancies);
-
-            while !attacks.is_empty() {
-                to_sq = attacks.extract_bit();
-                //Regular captures
-                if to_sq >= 8 {
-                    moves.add_move(Move::new(from_sq, to_sq, Piece::WhitePawn as u8, Piece::None as u8, true, false, false, false));
-
-                //Promotions
-                } else {
-                    moves.add_move(Move::new(from_sq, to_sq, Piece::WhitePawn as u8, Piece::WhiteQueen as u8,  true, false, false, false));
-                    moves.add_move(Move::new(from_sq, to_sq, Piece::WhitePawn as u8, Piece::WhiteKnight as u8, true, false, false, false));
-                    moves.add_move(Move::new(from_sq, to_sq, Piece::WhitePawn as u8, Piece::WhiteRook as u8,   true, false, false, false));
-                    moves.add_move(Move::new(from_sq, to_sq, Piece::WhitePawn as u8, Piece::WhiteBishop as u8, true, false, false, false))
-                }
-            }
-        }
-
-        //Castling kingside
-        if  move_types == MoveTypes::All && game.castling_ability & (CastlingAbility::WhiteKingSide as u8) != 0 &&              //castling ability
-            (game.all_occupancies.and(Bitboard::from_u64(6917529027641081856))).is_empty() &&   //f1 and g1 are free. 6917529027641081856 is f1 and g1 set
-            !game.is_square_attacked(Square::e1 as u8, Color::Black) &&                         //e1 is notunder attack
-            !game.is_square_attacked(Square::f1 as u8, Color::Black) {                          //f1 is not under attack
-
-                moves.add_move(Move::new(Square::e1 as u8, Square::g1 as u8, Piece::WhiteKing as u8, Piece::None as u8, false, false, false, true))
-        }
-        //Castling queen
-        if  move_types == MoveTypes::All && game.castling_ability & (CastlingAbility::WhiteQueenSide as u8) != 0 &&             //castling ability
-            (game.all_occupancies.and(Bitboard::from_u64(1008806316530991104))).is_empty() &&   //d1, c1 and b1 are free. 1008806316530991104 is f1 and g1 set
-            !game.is_square_attacked(Square::e1 as u8, Color::Black) &&                         //e1 is notunder attack
-            !game.is_square_attacked(Square::d1 as u8, Color::Black) {                          //d1 is not under attack
-
-                moves.add_move(Move::new(Square::e1 as u8, Square::c1 as u8, Piece::WhiteKing as u8, Piece::None as u8, false, false, false, true))
-        }
-    }
-    //BLACK
-    else {
-        opponent_occupancies = game.white_occupancies;
-        pawn_bitboard = game.get_piece_bitboard(Piece::BlackPawn);
-        rook_bitboard = game.get_piece_bitboard(Piece::BlackRook);
-        knight_bitboard = game.get_piece_bitboard(Piece::BlackKnight);
-        bishop_bitboard = game.get_piece_bitboard(Piece::BlackBishop);
-        queen_bitboard = game.get_piece_bitboard(Piece::BlackQueen);
-        king_bitboard = game.get_piece_bitboard(Piece::BlackKing);
-
-        rook =   Piece::BlackRook as u8;
-        knight = Piece::BlackKnight as u8;
-        bishop = Piece::BlackBishop as u8;
-        queen =  Piece::BlackQueen as u8;
-        king =   Piece::BlackKing as u8;
-
-        //Pawn moves
-        while !pawn_bitboard.is_empty() {
-            from_sq = pawn_bitboard.extract_bit();
-            to_sq = (from_sq as i8 + 8) as u8;
-            //Quiet
-            if move_types == MoveTypes::All && !game.all_occupancies.get_bit(to_sq) {
-                //to_sq is empty
-                if to_sq <= 55 {
-                    //Quiet move
-                    moves.add_move(Move::new(from_sq, to_sq, Piece::BlackPawn as u8, Piece::None as u8, false, false, false, false));
-
-                    //Double push
-                    to_sq = (to_sq as i8 + 8) as u8;
-                    if !game.all_occupancies.get_bit(to_sq) && from_sq / 8 == 1 {
-                        moves.add_move(Move::new(from_sq, to_sq, Piece::BlackPawn as u8, Piece::None as u8, false, true, false, false));
-                    }
-                }
-                //Promotions
-                else {
-                    moves.add_move(Move::new(from_sq, to_sq, Piece::BlackPawn as u8, Piece::BlackQueen as u8,  false, false, false, false));
-                    moves.add_move(Move::new(from_sq, to_sq, Piece::BlackPawn as u8, Piece::BlackKnight as u8, false, false, false, false));
-                    moves.add_move(Move::new(from_sq, to_sq, Piece::BlackPawn as u8, Piece::BlackRook as u8,   false, false, false, false));
-                    moves.add_move(Move::new(from_sq, to_sq, Piece::BlackPawn as u8, Piece::BlackBishop as u8, false, false, false, false))
-                }
-            }
-
-            //Captures
-            attacks = get_pawn_attack_table(from_sq, Color::Black);
-
-            //enpassant
-            if game.enpassant_square != Square::None && !attacks.and(Bitboard::from_u64(1 << game.enpassant_square as u8)).is_empty(){
-                moves.add_move(Move::new(from_sq, game.enpassant_square  as u8, Piece::BlackPawn as u8, Piece::None as u8, true, false, true, false));
-            }
-
-            //Overlap with opponent occupancies
-            attacks = attacks.and(game.white_occupancies);
-
-            while !attacks.is_empty() {
-                to_sq = attacks.extract_bit();
-                //Regular captures
-                if to_sq <= 55 {
-                    moves.add_move(Move::new(from_sq, to_sq, Piece::BlackPawn as u8, Piece::None as u8, true, false, false, false));
-
-                //Promotions
-                } else {
-                    moves.add_move(Move::new(from_sq, to_sq, Piece::BlackPawn as u8, Piece::BlackQueen as u8,  true, false, false, false));
-                    moves.add_move(Move::new(from_sq, to_sq, Piece::BlackPawn as u8, Piece::BlackKnight as u8, true, false, false, false));
-                    moves.add_move(Move::new(from_sq, to_sq, Piece::BlackPawn as u8, Piece::BlackRook as u8,   true, false, false, false));
-                    moves.add_move(Move::new(from_sq, to_sq, Piece::BlackPawn as u8, Piece::BlackBishop as u8, true, false, false, false))
-                }
-            }
-        }
-
-        //Castling kingside
-        if  move_types == MoveTypes::All && game.castling_ability & (CastlingAbility::BlackKingSide as u8) != 0 &&              //castling ability
-            (game.all_occupancies.and(Bitboard::from_u64(96))).is_empty() &&                    //f8 and g8 are free. 96 is f1 and g1 set
-            !game.is_square_attacked(Square::e8 as u8, Color::White) &&                         //e8 is notunder attack
-            !game.is_square_attacked(Square::f8 as u8, Color::White) {                          //f8 is not under attack
-
-                moves.add_move(Move::new(Square::e8 as u8, Square::g8 as u8, Piece::BlackKing as u8, Piece::None as u8, false, false, false, true))
-        }
-        //Castling queen
-        if  move_types == MoveTypes::All && game.castling_ability & (CastlingAbility::BlackQueenSide as u8) != 0 &&             //castling ability
-            (game.all_occupancies.and(Bitboard::from_u64(14))).is_empty() &&                    //d8, c8 and b8 are free. 14 is f1 and g1 set
-            !game.is_square_attacked(Square::e8 as u8, Color::White) &&                         //e8 is notunder attack
-            !game.is_square_attacked(Square::d8 as u8, Color::White) {                          //d8 is not under attack
-
-                moves.add_move(Move::new(Square::e8 as u8, Square::c8 as u8, Piece::BlackKing as u8, Piece::None as u8, false, false, false, true))
-        }
-    }
-
-    //Knight attacks
-    while !knight_bitboard.is_empty() {
-        from_sq = knight_bitboard.extract_bit();
-
-        //Raw attack table
-        attacks = get_knight_attack_table(from_sq);
-
-        if move_types == MoveTypes::All {
-            //Extract only quiet moves and loop over them
-            quiet = attacks.and(not(game.all_occupancies));
-            while !quiet.is_empty() {
-                to_sq = quiet.extract_bit();
-                moves.add_move(Move::new(from_sq, to_sq, knight, Piece::None as u8, false, false, false, false))
-            }
-        }
-
-        //Extract only captures and loop over them
-        attacks = attacks.and(opponent_occupancies);
-        while !attacks.is_empty() {
-            to_sq = attacks.extract_bit();
-            moves.add_move(Move::new(from_sq, to_sq, knight, Piece::None as u8, true, false, false, false))
-        }
-    }
-
-    //Bishop attacks
-    while !bishop_bitboard.is_empty() {
-        from_sq = bishop_bitboard.extract_bit();
-
-        //Raw attack table
-        attacks = get_bishop_attack_table(from_sq, game.all_occupancies);
-
-        if move_types == MoveTypes::All {
-            //Extract only quiet moves and loop over them
-            quiet = attacks.and(not(game.all_occupancies));
-            while !quiet.is_empty() {
-                to_sq = quiet.extract_bit();
-                moves.add_move(Move::new(from_sq, to_sq, bishop, Piece::None as u8, false, false, false, false))
-            }
-        }       
-
-        //Extract only captures and loop over them
-        attacks = attacks.and(opponent_occupancies);
-        while !attacks.is_empty() {
-            to_sq = attacks.extract_bit();
-            moves.add_move(Move::new(from_sq, to_sq, bishop, Piece::None as u8, true, false, false, false))
-        }
-    }
-
-    //Rook attacks
-    while !rook_bitboard.is_empty() {
-        from_sq = rook_bitboard.extract_bit();
-
-        //Raw attack table
-        attacks = get_rook_attack_table(from_sq, game.all_occupancies);
-
-        if move_types == MoveTypes::All {
-            //Extract only quiet moves and loop over them
-            quiet = attacks.and(not(game.all_occupancies));
-            while !quiet.is_empty() {
-                to_sq = quiet.extract_bit();
-                moves.add_move(Move::new(from_sq, to_sq, rook, Piece::None as u8, false, false, false, false))
-            }
-        }
-        //Extract only captures and loop over them
-        attacks = attacks.and(opponent_occupancies);
-        while !attacks.is_empty() {
-            to_sq = attacks.extract_bit();
-            moves.add_move(Move::new(from_sq, to_sq, rook, Piece::None as u8, true, false, false, false))
-        }
-    }
-
-    //Queen attacks
-    while !queen_bitboard.is_empty() {
-        from_sq = queen_bitboard.extract_bit();
-
-        //Raw attack table
-        attacks = get_queen_attack_table(from_sq, game.all_occupancies);
-
-        if move_types == MoveTypes::All {
-            //Extract only quiet moves and loop over them
-            quiet = attacks.and(not(game.all_occupancies));
-            while !quiet.is_empty() {
-                to_sq = quiet.extract_bit();
-                moves.add_move(Move::new(from_sq, to_sq, queen, Piece::None as u8, false, false, false, false))
-            }
-        }
-        //Extract only captures and loop over them
-        attacks = attacks.and(opponent_occupancies);
-        while !attacks.is_empty() {
-            to_sq = attacks.extract_bit();
-            moves.add_move(Move::new(from_sq, to_sq, queen, Piece::None as u8, true, false, false, false))
-        }
-    }
-
-    //King attacks
-    while !king_bitboard.is_empty() {
-        from_sq = king_bitboard.extract_bit();
-
-        //Raw attack table
-        attacks = get_king_attack_table(from_sq,);
-
-        if move_types == MoveTypes::All {
-            //Extract only quiet moves and loop over them
-            quiet = attacks.and(not(game.all_occupancies));
-            while !quiet.is_empty() {
-                to_sq = quiet.extract_bit();
-                moves.add_move(Move::new(from_sq, to_sq, king, Piece::None as u8, false, false, false, false))
-            }
-        }
-
-        //Extract only captures and loop over them
-        attacks = attacks.and(opponent_occupancies);
-        while !attacks.is_empty() {
-            to_sq = attacks.extract_bit();
-            moves.add_move(Move::new(from_sq, to_sq, king, Piece::None as u8, true, false, false, false))
-        }
-    }
-
-    moves
-}
-
-#[inline(always)]
-pub fn is_legal(game: &Game, cmove: &Move) -> bool {
-    let from_sq = cmove.from_square();
-    let to_sq = cmove.to_square();
-    let capture = cmove.is_capture();
-    let piece_ind = cmove.piece() as usize;
-
-    let mut copy = *game;
-
-    //Peek make
-    //Update all_occupancies
-    copy.all_occupancies.unset_bit(from_sq);
-    copy.bitboards[piece_ind].unset_bit(from_sq);
-    copy.bitboards[piece_ind].set_bit(to_sq);
-    copy.all_occupancies.set_bit(to_sq);
-    
-    if cmove.is_enpassant() {
-        if copy.active_player == Color::White {
-            copy.bitboards[Piece::BlackPawn as usize].unset_bit(to_sq + 8);
-            copy.all_occupancies.unset_bit(to_sq + 8);
+            //Swap
+            best = self.moves[best_index];
+            self.moves[self.extract_index] = self.moves[best_index];
         }
         else {
-            copy.bitboards[Piece::WhitePawn as usize].unset_bit(to_sq - 8);
-            copy.all_occupancies.unset_bit(to_sq - 8);
+            best = self.moves[self.extract_index]
         }
+        
+        self.extract_index += 1;
+
+        best
     }
 
-    //Unset captured
-    else if capture {
-        let start;
-        let end;
-        if copy.active_player == Color::White {
-            start = Piece::BlackPawn as usize;
-            end = Piece::BlackKing as usize;
-        }
-        else {
-            start = Piece::WhitePawn as usize;
-            end = Piece::WhiteKing as usize;
-        }
-
-        for bb in start..end {
-            if copy.bitboards[bb].get_bit(to_sq) {
-                copy.bitboards[bb].unset_bit(to_sq);
-                break;
-            }
-        }
+    ///Adds the pv move to the move list if one exists
+    fn add_pv_move(&mut self) {
+        todo!()
     }
 
-    //Check check
-    !copy.is_in_check(game.active_player)
+    ///Generates capturing moves and adds them to the list
+    fn generate_captures(&mut self) {
+        todo!()
+    }
+
+    ///Generate quiet moves and adds them to the list
+    fn generate_non_captures(&mut self) {
+        todo!()
+    }
+
+    ///Scores a capturing move
+    fn score_capture_move(&mut self) {
+        todo!()
+    }
+
+    ///Scores a quiet move
+    fn score_quiet_move(&mut self) {
+        todo!()
+    }
+
+    ///Finds the associated with a uci string representation. eg. B2B1q
+    pub fn parse_move(&mut self, input: String) -> Option<Move> {
+        todo!()
+    }
 }
-
+/*
 #[cfg(test)]
 mod move_gen_tests {
     use super::*;
@@ -697,3 +444,4 @@ mod move_gen_tests {
         assert_eq!(moves.contains(&Move::new_friendly(Square::e8, Square::c8, Piece::WhiteKing, Piece::None, false, false, false, true)), false);
     }
 }
+*/

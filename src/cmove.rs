@@ -1,41 +1,15 @@
 use super::*;
 
-pub const NULL_MOVE: Move = Move { data: 0 };
+pub const NULL_MOVE: Move = Move { data: 0, score: 0 };
 
 #[derive(Clone, Copy)]
 #[derive(PartialEq)]
 pub struct Move {
-    data: u32
+    data: u32,
+    pub score: u8
 }
 
 impl Move {
-    pub fn new(from_square: u8,        // 0x3f
-               to_square: u8,          // 0xfc0
-               piece: u8,               // 0xf000
-               promotion: u8,           // 0xf0000
-               is_capture: bool,           // 0x100000
-               is_double_push: bool,       // 0x200000
-               is_enpassant: bool,         // 0x400000
-               is_castling: bool           // 0x800000
-            ) -> Self {
-        
-        let mut data: u32 = from_square as u32;
-        
-        data |= (to_square as u32) << 6;
-        data |= (piece as u32) << 12;
-        data |= (promotion as u32) << 16;
-        if is_capture { data |= 0x100000; }
-        if is_double_push { data |= 0x200000; }
-        if is_enpassant { data |= 0x400000; }
-        if is_castling { data |= 0x800000; }
-
-        Self { data: data }
-    }
-
-    /*pub fn new_from_u32(data: u32) -> Self{
-        Self { data: data }
-    }*/
-
     #[cfg(test)]
     pub fn new_friendly(from_square: Square,        // 0x3f
                         to_square: Square,          // 0xfc0
@@ -47,6 +21,31 @@ impl Move {
                         is_castling: bool           // 0x800000) 
                     ) -> Self {
         Move::new(from_square as u8, to_square as u8, piece as u8, promotion as u8, is_capture, is_double_push, is_enpassant, is_castling)
+    }
+
+    pub fn new(from_square: u8,        // 0x3f
+               to_square: u8,          // 0xfc0
+               piece: u8,               // 0xf000
+               promotion: u8,           // 0xf0000
+               is_capture: bool,           // 0x100000
+               is_double_push: bool,       // 0x200000
+               is_enpassant: bool,         // 0x400000
+               is_castling: bool           // 0x800000
+            ) -> Self {
+        
+        let mut data: u32 = from_square as u32;
+
+        data |= (to_square as u32) << 6 | (piece as u32) << 12 | (promotion as u32) << 16;
+        if is_capture { data |= 0x100000; }
+        if is_double_push { data |= 0x200000; }
+        if is_enpassant { data |= 0x400000; }
+        if is_castling { data |= 0x800000; }
+
+        Self { data: data, score: 0 }
+    }
+
+    pub fn set_score(&mut self, score: u8) {
+        self.score = score;
     }
 
     pub fn from_square(&self) -> u8 {

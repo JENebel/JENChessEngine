@@ -1,4 +1,4 @@
-use super::utilities::*;
+use super::*;
 
 #[derive(Clone, Copy)]
 pub struct Bitboard {
@@ -80,20 +80,24 @@ impl Bitboard {
         Self { bits: self.bits & other.bits }
     }
 
-    pub fn pop_count(&mut self) -> u32 {
-        self.bits.count_ones()
+    pub fn and_u64(&self, other: u64) -> Self {
+        Self { bits: self.bits & other }
     }
 
     pub fn or(&self, other: Bitboard) -> Self {
         Self { bits: self.bits | other.bits }
     }
 
+    pub fn or_u64(&self, other: u64) -> Self {
+        Self { bits: self.bits | other }
+    }
+
+    pub fn pop_count(&mut self) -> u32 {
+        self.bits.count_ones()
+    }
+
     /*
     pub fn xor(&self, other: Bitboard) -> Self {
         Self { bits: self.bits ^ other.bits }
     }*/
-}
-#[inline(always)]
-pub fn not(bitboard: Bitboard) -> Bitboard {
-    Bitboard { bits: !bitboard.bits }
 }

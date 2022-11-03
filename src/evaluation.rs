@@ -82,6 +82,18 @@ pub const MIRRORED: [usize; 64] =
 	0,  1,  2,  3,  4,  5,  6,  7
 ];
 
+pub const LOOKUP_RANK: [usize; 64] =
+[
+    7, 7, 7, 7, 7, 7, 7, 7,
+    6, 6, 6, 6, 6, 6, 6, 6,
+    5, 5, 5, 5, 5, 5, 5, 5,
+    4, 4, 4, 4, 4, 4, 4, 4,
+    3, 3, 3, 3, 3, 3, 3, 3,
+    2, 2, 2, 2, 2, 2, 2, 2,
+    1, 1, 1, 1, 1, 1, 1, 1,
+	0, 0, 0, 0, 0, 0, 0, 0
+];
+
 ///[attacker][victim]
 pub const MVV_LVA: [[i32; 12]; 12] = [
     [105, 205, 305, 405, 505, 605,  105, 205, 305, 405, 505, 605],
@@ -126,7 +138,7 @@ const ROOK_MOB: i32 = 3;
 const QUEEN_MOB: f32 = 1.5;*/
 
 
-pub fn evaluate(game: &Game) -> i32 {
+pub fn evaluate(game: &Position) -> i32 {
     let mut score: i32 = 0;
 
     let mut stacked_pawns;
@@ -477,7 +489,7 @@ mod eval_tests {
 
     #[test]
     pub fn eval () {
-        let game = Game::new_from_fen("6k1/ppppprbp/8/8/8/8/PPPPPRBP/6K1 w - - 0 1 ").unwrap();
+        let game = Position::new_from_fen("6k1/ppppprbp/8/8/8/8/PPPPPRBP/6K1 w - - 0 1 ").unwrap();
         game.pretty_print();
         println!("{}", evaluate(&game));
     }

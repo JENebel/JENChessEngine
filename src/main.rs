@@ -1,9 +1,7 @@
-mod game;
+mod position;
 mod bitboard;
 mod attack_tables;
 mod cmove;
-mod move_list;
-mod utilities;
 mod search;
 mod move_generator;
 mod make_move;
@@ -11,17 +9,16 @@ mod perft;
 mod evaluation;
 mod transposition_table;
 mod repetition_table;
+mod constant_generation;
+mod io;
 
 use core::panic;
-use std::{io::{self}, process, time::SystemTime};
+use std::process;
 
-use game::*;
-
+use position::*;
 use cmove::*;
 use bitboard::*;
 use attack_tables::*;
-use move_list::*;
-use utilities::*;
 use search::*;
 use move_generator::*;
 use make_move::*;
@@ -29,11 +26,13 @@ use perft::*;
 use evaluation::*;
 use transposition_table::*;
 use repetition_table::*;
+use constant_generation::*;
+use io::*;
 
 fn main() {
     let io_receiver = IoWrapper::init();
 
-    let mut game = Game::new_from_start_pos();
+    let mut pos = Position::new_from_start_pos();
 
     let mut tt = TranspositionTable::new();
 
@@ -46,7 +45,7 @@ fn main() {
             match split.next().unwrap().to_ascii_lowercase().as_str() {
                 "exit" | "x" | "quit" => { println!(" Exited!"); process::exit(0) },
                 "help" => print_help(),
-                "d" => { game.pretty_print(); }
+                "d" => { pos.pretty_print(); }
                 "position" => {
                     if !split.peek().is_some() { continue; }
                     repetition_table.clear();
@@ -55,7 +54,7 @@ fn main() {
                     if p.is_none() {
                         panic!(" Illegal fen string");
                     } else {
-                        game = p.unwrap();
+                        pos = p.unwrap();
                     }
                 },
                 "perft" => {
@@ -64,12 +63,12 @@ fn main() {
                     if !split2.peek().is_some() { continue; }
                     let pos = split2.next().unwrap().to_string();
                     let depth = (if pos == "simple" { if !split2.peek().is_some() { println!(" Please provide depth"); continue; } split2.next().unwrap() } else { pos.as_str() }).parse::<u8>().unwrap();
-                    go_perft(depth, game, pos != "simple");
+                    go_perft(depth, pos, pos != "simple");
                 },
                 "perft!" => {
                     let depth = split.next().unwrap().parse::<u8>().unwrap();
                     for i in 1..depth + 1 {
-                        go_perft(i, game, false)
+                        go_perft(i, pos, false)
                     }
                     println!(" Done with perft!")
                 },
@@ -96,10 +95,10 @@ fn main() {
                 "isready" => print!("readyok\n"),
                 "go" => {
                     if split.peek().is_none() { continue; }
-                    parse_go(input.split_at(2).1.to_string(), &mut game, &io_receiver, &mut tt, &mut repetition_table)
+                    parse_go(input.split_at(2).1.to_string(), &mut pos, &io_receiver, &mut tt, &mut repetition_table)
                 },
                 "eval" => {
-                    let result = evaluate(&game);
+                    let result = evaluate(&pos);
                     println!(" {}", result);
                 },
                 "sbench" => {
@@ -108,12 +107,12 @@ fn main() {
                 "move" => {
                     while !split.peek().is_none() {
                         let mov = split.next().unwrap();
-                        let parsed = game.parse_move(mov.to_string());
+                        let parsed = MoveGenerator::initialize(&mut pos, MoveTypes::All).parse_move(mov.to_string());
                         if parsed.is_none() {
                             panic!("Illegal move");
                         }
                         else {
-                            make_search_move(&mut game, &parsed.unwrap(), &mut repetition_table);
+                            pos.make_move(&parsed.unwrap(), &mut repetition_table);
                         }
                     }
                 },
@@ -124,16 +123,16 @@ fn main() {
     }
 }
 
-fn parse_position(args: String, rep_table: &mut RepetitionTable) -> Option<Game> {
-    let pos = args.split(" ").next().unwrap().to_string();
+fn parse_position(args: String, rep_table: &mut RepetitionTable) -> Option<Position> {
+    let pstring = args.split(" ").next().unwrap().to_string();
     let rest: String;
-    let mut game;
-    if pos == "startpos" {
-        game = Game::new_from_start_pos();
+    let mut pos;
+    if pstring == "startpos" {
+        pos = Position::new_from_start_pos();
 
         rest = args.chars().skip(9).collect();
     }
-    else if pos == "fen" {
+    else if pstring == "fen" {
         if args.len() < 5 {
             return None;
         }
@@ -141,9 +140,9 @@ fn parse_position(args: String, rep_table: &mut RepetitionTable) -> Option<Game>
 
         rest = args.chars().skip(4 + fen.len()).collect();
 
-        let result = Game::new_from_fen(fen.as_str());
+        let result = Position::new_from_fen(fen.as_str());
         match result {
-            Some(g) => game = g,
+            Some(g) => pos = g,
             None => return None
         }
     }
@@ -155,17 +154,17 @@ fn parse_position(args: String, rep_table: &mut RepetitionTable) -> Option<Game>
         split.next();
         while !split.peek().is_none() {
             let mov = split.next().unwrap();
-            let parsed = game.parse_move(mov.to_string());
+            let parsed = MoveGenerator::initialize(&mut pos, MoveTypes::All).parse_move(mov.to_string());
             if parsed.is_none() {
                 panic!("Illegal move");
             }
             else {
-                make_search_move(&mut game, &parsed.unwrap(), rep_table);
+                pos.make_move(&parsed.unwrap(), rep_table);
             }
         }
     }
 
-    Some(game)
+    Some(pos)
 }
 
 fn parse_go(args: String, game: &mut Game, io_receiver: &IoWrapper, tt: &mut TranspositionTable, rep_table: &mut RepetitionTable){
