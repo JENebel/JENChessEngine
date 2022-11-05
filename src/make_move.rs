@@ -1,7 +1,5 @@
 use super::*;
 
-use super::*;
-
 pub const PIECE_KEYS: [[u64; 64]; 12] = generate_piece_keys();
 pub const ENPASSANT_KEYS: [u64; 64] = generate_enpassant_keys();
 pub const CASTLE_KEYS: [u64; 16] = generate_castle_keys();
@@ -19,7 +17,7 @@ pub const CASTLING_RIGHTS: [u8; 64] = [
 ];
 
 impl Position {
-    pub fn make_move(&mut self, cmove: &Move) -> bool {
+    pub fn make_move(&mut self, cmove: &Move, rep_table: &mut RepetitionTable) -> bool {
 
         let from_square = cmove.from_square();
         let to_square   = cmove.to_square();
@@ -194,7 +192,7 @@ impl Position {
         self.active_player = opposite_color(self.active_player);
         self.zobrist_hash ^= SIDE_KEY;
 
-        //rep_table.insert(self.zobrist_hash);
+        rep_table.insert(self.zobrist_hash);
 
         true
     }

@@ -1,8 +1,10 @@
 use rayon::prelude::*;
 
 use super::*;
-/*
-pub fn perft(game: &mut Game, depth: u8, print: bool) -> u128 {
+
+pub fn perft(pos: &mut Position, depth: u8, print: bool) -> u128 {
+    todo!()
+    /*
     let moves = generate_moves(game, MoveTypes::All);
 
     if depth == 1 {
@@ -40,6 +42,5 @@ pub fn perft(game: &mut Game, depth: u8, print: bool) -> u128 {
             }
             else { 0 }
         }).sum()
-    }
+    }*/
 }
-*/

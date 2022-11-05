@@ -1,21 +1,19 @@
 //use rand::{Rng};
 
-use std::time::SystemTime;
-
 use rand::Rng;
 
 use super::*;
 
-const MAX_PLY: usize = 64;
-const FULL_DEPTH_MOVES: u8 = 4;
-const REDUCTION_LIMIT: u8 = 3;
-pub const MATE_VALUE: i32 = 49000;
+pub const MAX_PLY: usize = 64;
+pub const FULL_DEPTH_MOVES: u8 = 4;
+pub const REDUCTION_LIMIT: u8 = 3;
+pub const MATE_VALUE: i32 = 49000; //Score returned on mate
 pub const MATE_BOUND: i32 = 48000; //Lower bound for mating score
 const INFINITY: i32 = 50000;
 
-const INPUT_POLL_INTERVAL: u64 = 16383;
+const INPUT_POLL_INTERVAL: u64 = 16383; //Node interval to check if search aborted
 
-pub fn find_random(pos: &mut Position) {
+pub fn find_random_move(pos: &mut Position) {
     let moves = MoveGenerator::initialize(&mut pos, MoveTypes::All).collect();
     let rand = rand::thread_rng().gen_range(0..moves.len());
     print!("bestmove {}\n", moves[rand].to_uci());
@@ -37,10 +35,7 @@ impl SearchResult {
 }
 
 //Start a search, max_time = -1 for no limit
-pub fn search(game: &mut Position, depth: i8, max_time: i64, io_receiver: &IoWrapper, tt: &mut TranspositionTable, rep_table: &mut RepetitionTable) -> SearchResult {
-
-    let mut envir = SearchEnv::new(max_time, io_receiver, tt, rep_table);
-
+pub fn search(game: &mut Position, depth: i8, max_time: i64, io_receiver: &IoWrapper, tt: &mut TranspositionTable, envir: &mut SearchEnv) -> SearchResult {
     let mut score = 0;
 
     let mut alpha = -INFINITY;
@@ -52,7 +47,7 @@ pub fn search(game: &mut Position, depth: i8, max_time: i64, io_receiver: &IoWra
     while current_depth <= max_depth as u8 {
         envir.follow_pv = true;
 
-        score = negamax(game, current_depth as u8, alpha, beta, &mut envir);
+        score = negamax(game, current_depth as u8, alpha, beta, tt, &mut envir);
 
         if envir.stopping { break }
 
@@ -93,13 +88,13 @@ pub fn search(game: &mut Position, depth: i8, max_time: i64, io_receiver: &IoWra
 }
 
 #[inline]
-fn negamax(pos: &mut Position, depth: u8, alpha: i32, beta: i32, envir: &mut SearchEnv) -> i32 {
+fn negamax(pos: &mut Position, depth: u8, alpha: i32, beta: i32, tt: &mut TranspositionTable, envir: &mut SearchEnv) -> i32 {
     
     let is_pv_node = (beta - alpha) > 1;
 
     let mut score;
     if envir.ply != 0 && !is_pv_node {
-        score = envir.transposition_table.probe(pos.zobrist_hash, depth, alpha, beta, envir.ply);
+        score = tt.probe_score(pos.zobrist_hash, depth, alpha, beta, envir.ply);
         if score != UNKNOWN_SCORE {
             envir.tt_hits += 1;
             return score;
@@ -156,7 +151,7 @@ fn negamax(pos: &mut Position, depth: u8, alpha: i32, beta: i32, envir: &mut Sea
 
         envir.ply += 1;
 
-        score = -negamax(&mut copy, n_depth - 1 - 2, -beta, -beta + 1, envir);
+        score = -negamax(&mut copy, n_depth - 1 - 2, -beta, -beta + 1, tt, envir);
 
         envir.ply -= 1;
 
@@ -191,7 +186,7 @@ fn negamax(pos: &mut Position, depth: u8, alpha: i32, beta: i32, envir: &mut Sea
 
         if moves_searched == 0 {
             //Full PV Search
-            score = -negamax(&mut copy, n_depth - 1, -beta, -temp_alpha, envir);
+            score = -negamax(&mut copy, n_depth - 1, -beta, -temp_alpha, tt, envir);
         } else {
             //Regular search with LMR
 
@@ -201,7 +196,7 @@ fn negamax(pos: &mut Position, depth: u8, alpha: i32, beta: i32, envir: &mut Sea
                         !m.is_capture() &&
                         m.promotion() == Piece::None as u8 {
                 //Reduced search
-                -negamax(&mut copy, n_depth - 2, -temp_alpha - 1, -temp_alpha, envir)
+                -negamax(&mut copy, n_depth - 2, -temp_alpha - 1, -temp_alpha, tt, envir)
 
             } else {
                 //Ensure a full search
@@ -210,12 +205,12 @@ fn negamax(pos: &mut Position, depth: u8, alpha: i32, beta: i32, envir: &mut Sea
 
             //PVS
             if score > temp_alpha {
-                score = -negamax(&mut copy, n_depth - 1, -temp_alpha - 1, -temp_alpha, envir);
+                score = -negamax(&mut copy, n_depth - 1, -temp_alpha - 1, -temp_alpha, tt, envir);
 
                 //Check bounds
                 if score > temp_alpha && score < beta {
                     //Full search on failure
-                    score = -negamax(&mut copy, n_depth - 1, -beta, -temp_alpha, envir);
+                    score = -negamax(&mut copy, n_depth - 1, -beta, -temp_alpha, tt, envir);
                 }
             }
         }
@@ -239,7 +234,7 @@ fn negamax(pos: &mut Position, depth: u8, alpha: i32, beta: i32, envir: &mut Sea
                 }
     
                 //Record TT entry
-                envir.transposition_table.record(pos.zobrist_hash, beta, depth, HashFlag::Beta, envir.ply);
+                tt.record(pos.zobrist_hash, beta, depth, HashFlag::Beta, envir.ply);
     
                 return beta;
             }
@@ -267,7 +262,7 @@ fn negamax(pos: &mut Position, depth: u8, alpha: i32, beta: i32, envir: &mut Sea
     }
     
     //Record TT entry
-    envir.transposition_table.record(pos.zobrist_hash, temp_alpha, depth, hash_flag, envir.ply);
+    tt.record(pos.zobrist_hash, temp_alpha, depth, hash_flag, envir.ply);
 
     temp_alpha
 }
@@ -303,7 +298,7 @@ fn quiescence(pos: &mut Position, alpha: i32, beta: i32, envir: &mut SearchEnv) 
         let m = moves.get_next_move(true);
 
         let mut copy = *pos;
-        if !copy.make_move(&m, &mut envir.repetition_table) {
+        if !copy.make_move(&m, envir) {
             continue;
         }
         
@@ -325,63 +320,4 @@ fn quiescence(pos: &mut Position, alpha: i32, beta: i32, envir: &mut SearchEnv) 
     }
 
     temp_alpha
-}
-
-pub struct SearchEnv<'a> {
-    pub nodes: u64,
-    pub ply: u8,
-    pub killer_moves: [[Option<Move>; MAX_PLY]; 2],
-    pub history_moves: [[i32; 64]; 12],
-    pub pv_lengths: [usize; MAX_PLY],
-    pub pv_table: [[Move; MAX_PLY]; MAX_PLY],
-    pub follow_pv: bool,
-    pub score_pv: bool,
-    pub stopping: bool,
-    io_receiver: &'a IoWrapper,
-    pub start_time: SystemTime,
-    max_time: i64,
-    transposition_table: &'a mut TranspositionTable,
-    pub tt_hits: u32,
-    pub repetition_table: &'a mut RepetitionTable,
-}
-
-impl <'a>SearchEnv<'a> {
-    pub fn new(max_time: i64, io_receiver: &'a IoWrapper, tt: &'a mut TranspositionTable, rep_table: &'a mut RepetitionTable) -> Self {
-        Self{
-            nodes: 0,
-            ply: 0,
-            killer_moves: [[None; MAX_PLY]; 2],
-            history_moves: [[0 as i32; 64]; 12],
-            pv_lengths: [0; MAX_PLY],
-            pv_table: [[NULL_MOVE; MAX_PLY]; MAX_PLY],
-            follow_pv: false,
-            score_pv: false,
-            stopping: false,
-            io_receiver: io_receiver,
-            start_time: SystemTime::now(),
-            max_time: max_time,
-            transposition_table: tt,
-            tt_hits: 0,
-            repetition_table: rep_table
-        }
-    }
-
-    pub fn insert_pv_node(&mut self, cmove: Move) {
-        let ply = self.ply as usize;
-
-        self.pv_table[ply][ply] = cmove;
-        
-        for next_ply in (ply + 1)..self.pv_lengths[ply + 1] {
-            self.pv_table[ply][next_ply] = self.pv_table[ply + 1][next_ply];
-        }
-
-        self.pv_lengths[ply] = self.pv_lengths[ply + 1];
-    }
-
-    pub fn poll_input(&mut self) {
-        if (self.max_time != -1 && self.start_time.elapsed().unwrap().as_millis() as i64 >= self.max_time) || self.io_receiver.try_read_line().is_some() {
-            self.stopping = true;
-            return;
-        }
-    }
 }

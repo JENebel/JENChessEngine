@@ -94,8 +94,11 @@ impl <'a>MoveGenerator<'a> {
     }
 
     ///Adds the pv move to the move list if one exists
-    fn add_pv_move(&mut self) {
-        todo!()
+    pub fn add_pv_move(&mut self, tt: &TranspositionTable) {
+        let best = tt.probe_best_move(self.pos.zobrist_hash);
+        if best != NULL_MOVE {
+            self.add_move(best)
+        }
     }
 
     ///Generates capturing moves and adds them to the list
@@ -108,13 +111,20 @@ impl <'a>MoveGenerator<'a> {
         todo!()
     }
 
+    #[inline(always)]
+    ///Adds the generated move to the move list
+    fn add_move(&mut self, cmove: Move) {
+        self.moves[self.insert_index] = cmove;
+        self.insert_index += 1;
+    }
+
     ///Scores a capturing move
-    fn score_capture_move(&mut self) {
+    fn score_and_add_capture_move(&mut self) {
         todo!()
     }
 
     ///Scores a quiet move
-    fn score_quiet_move(&mut self) {
+    fn score_and_add_quiet_move(&mut self) {
         todo!()
     }
 
@@ -123,6 +133,7 @@ impl <'a>MoveGenerator<'a> {
         todo!()
     }
 }
+
 /*
 #[cfg(test)]
 mod move_gen_tests {

@@ -11,9 +11,10 @@ mod transposition_table;
 mod repetition_table;
 mod constant_generation;
 mod io;
+mod search_env;
 
 use core::panic;
-use std::process;
+use std::{process, time::SystemTime};
 
 use position::*;
 use cmove::*;
@@ -28,6 +29,7 @@ use transposition_table::*;
 use repetition_table::*;
 use constant_generation::*;
 use io::*;
+use search_env::*;
 
 fn main() {
     let io_receiver = IoWrapper::init();
@@ -36,8 +38,8 @@ fn main() {
 
     let mut tt = TranspositionTable::new();
 
-    let mut repetition_table = RepetitionTable::new();
-    
+    let mut rep_table = RepetitionTable::new();
+
     loop {
         let input = io_receiver.read_line();
         if input != "" {
@@ -48,22 +50,22 @@ fn main() {
                 "d" => { pos.pretty_print(); }
                 "position" => {
                     if !split.peek().is_some() { continue; }
-                    repetition_table.clear();
-                    let p = parse_position(input.split_at(9).1.to_string(), &mut repetition_table);
+                    let p = parse_position(input.split_at(9).1.to_string());
 
                     if p.is_none() {
                         panic!(" Illegal fen string");
                     } else {
-                        pos = p.unwrap();
+                        pos = p.unwrap().0;
+                        rep_table = p.unwrap().1;
                     }
                 },
                 "perft" => {
                     if !split.peek().is_some() { continue; }
                     let mut split2 = split.next().unwrap().splitn(2, " ").peekable();
                     if !split2.peek().is_some() { continue; }
-                    let pos = split2.next().unwrap().to_string();
-                    let depth = (if pos == "simple" { if !split2.peek().is_some() { println!(" Please provide depth"); continue; } split2.next().unwrap() } else { pos.as_str() }).parse::<u8>().unwrap();
-                    go_perft(depth, pos, pos != "simple");
+                    let arg = split2.next().unwrap().to_string();
+                    let depth = (if arg == "simple" { if !split2.peek().is_some() { println!(" Please provide depth"); continue; } split2.next().unwrap() } else { arg.as_str() }).parse::<u8>().unwrap();
+                    go_perft(depth, pos, arg != "simple");
                 },
                 "perft!" => {
                     let depth = split.next().unwrap().parse::<u8>().unwrap();
@@ -89,13 +91,12 @@ fn main() {
                     print!("uciok\n");
                 },
                 "ucinewgame" | "cleartt" => {
-                    repetition_table.clear();
                     tt.clear();
                 },
                 "isready" => print!("readyok\n"),
                 "go" => {
                     if split.peek().is_none() { continue; }
-                    parse_go(input.split_at(2).1.to_string(), &mut pos, &io_receiver, &mut tt, &mut repetition_table)
+                    parse_go(input.split_at(2).1.to_string(), &mut pos, &io_receiver, &mut tt, &mut rep_table)
                 },
                 "eval" => {
                     let result = evaluate(&pos);
@@ -112,7 +113,7 @@ fn main() {
                             panic!("Illegal move");
                         }
                         else {
-                            pos.make_move(&parsed.unwrap(), &mut repetition_table);
+                            pos.make_move(&parsed.unwrap(), &mut rep_table);
                         }
                     }
                 },
@@ -123,7 +124,8 @@ fn main() {
     }
 }
 
-fn parse_position(args: String, rep_table: &mut RepetitionTable) -> Option<Position> {
+fn parse_position(args: String) -> Option<(Position, RepetitionTable)> {
+    let mut rep_table = RepetitionTable::new();
     let pstring = args.split(" ").next().unwrap().to_string();
     let rest: String;
     let mut pos;
@@ -159,15 +161,15 @@ fn parse_position(args: String, rep_table: &mut RepetitionTable) -> Option<Posit
                 panic!("Illegal move");
             }
             else {
-                pos.make_move(&parsed.unwrap(), rep_table);
+                pos.make_move(&parsed.unwrap(), &mut rep_table);
             }
         }
     }
 
-    Some(pos)
+    Some((pos, rep_table))
 }
 
-fn parse_go(args: String, game: &mut Game, io_receiver: &IoWrapper, tt: &mut TranspositionTable, rep_table: &mut RepetitionTable){
+fn parse_go(args: String, pos: &mut Position, io_receiver: &IoWrapper, tt: &mut TranspositionTable, envir: &mut SearchEnv){
     let mut split = args.split(" ").peekable();
 
     //Load arguments
@@ -183,25 +185,25 @@ fn parse_go(args: String, game: &mut Game, io_receiver: &IoWrapper, tt: &mut Tra
             continue;
         }
         match arg {
-            "binc" => if game.active_player == Color::Black {
+            "binc" => if pos.active_player == Color::Black {
                 let t = split.next().unwrap();
                 inc = t.parse::<i64>().unwrap(); 
                 } else {
                     split.next();
             },
-            "winc" => if game.active_player == Color::White {
+            "winc" => if pos.active_player == Color::White {
                 let t = split.next().unwrap();
                 inc = t.parse::<i64>().unwrap(); 
                 } else {
                     split.next();
             },
-            "btime" => if game.active_player == Color::Black {
+            "btime" => if pos.active_player == Color::Black {
                 let t = split.next().unwrap();
                 time = t.parse::<i64>().unwrap();
                 } else {
                     split.next();
             },
-            "wtime" => if game.active_player == Color::White {
+            "wtime" => if pos.active_player == Color::White {
                 let t = split.next().unwrap();
                 time = t.parse::<i64>().unwrap(); 
                 } else {
@@ -226,7 +228,7 @@ fn parse_go(args: String, game: &mut Game, io_receiver: &IoWrapper, tt: &mut Tra
             "infinite" => {},
             //Random mover
             "random" => {
-                search_random(game);
+                find_random_move(pos);
                 return;
             },
             
@@ -254,27 +256,20 @@ fn parse_go(args: String, game: &mut Game, io_receiver: &IoWrapper, tt: &mut Tra
     }
 
     //Run search
-    search(game, depth, time, &io_receiver, tt, rep_table);
-}
-
-pub fn read_line() -> String {
-    let stdin = io::stdin();
-    let mut input: String = String::new(); 
-    stdin.read_line(&mut input).expect("Could not read line");
-    input.trim().to_string()
+    search(pos, depth, time, &io_receiver, tt, envir);
 }
 
 pub fn sbench(io_receiver: &IoWrapper) {
     let poss = [
-        Game::new_from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1").unwrap(),    //Tricky position
-        Game::new_from_fen("rnbqkb1r/pp1p1pPp/8/2p1pP2/1P1P4/3P3P/P1P1P3/RNBQKBNR w KQkq e6 0 1").unwrap(),     //killer position
-        Game::new_from_fen("r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9").unwrap(),    //CMK position
-        Game::new_from_fen("6k1/3q1pp1/pp5p/1r5n/8/1P3PP1/PQ4BP/2R3K1 w - - 0 1").unwrap(),
-        Game::new_from_fen("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 10").unwrap(),
-        Game::new_from_fen("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1").unwrap(),
-        Game::new_from_fen("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8").unwrap(),
-        Game::new_from_fen("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10").unwrap(),
-        Game::new_from_start_pos()
+        Position::new_from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1").unwrap(),    //Tricky position
+        Position::new_from_fen("rnbqkb1r/pp1p1pPp/8/2p1pP2/1P1P4/3P3P/P1P1P3/RNBQKBNR w KQkq e6 0 1").unwrap(),     //killer position
+        Position::new_from_fen("r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9").unwrap(),    //CMK position
+        Position::new_from_fen("6k1/3q1pp1/pp5p/1r5n/8/1P3PP1/PQ4BP/2R3K1 w - - 0 1").unwrap(),
+        Position::new_from_fen("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 10").unwrap(),
+        Position::new_from_fen("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1").unwrap(),
+        Position::new_from_fen("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8").unwrap(),
+        Position::new_from_fen("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10").unwrap(),
+        Position::new_from_start_pos()
     ];
     let start = SystemTime::now();
     let depth = 10;
@@ -282,7 +277,7 @@ pub fn sbench(io_receiver: &IoWrapper) {
     let mut nodes = 0;
     for mut p in poss {
         //p.pretty_print();
-        let result = search(&mut p, depth, -1, &io_receiver, &mut TranspositionTable::new(), &mut RepetitionTable::new());
+        let result = search(&mut p, depth, -1, &io_receiver, &mut TranspositionTable::new(), &mut SearchEnv::new(-1, io_receiver, &mut RepetitionTable::new()));
         nodes += result.nodes_visited;
         tt_hits += result.tt_hits;
         if !result.reached_max_ply {
@@ -294,16 +289,16 @@ pub fn sbench(io_receiver: &IoWrapper) {
     println!(" RESULT: Depth: {}\t Nodes: {}\t TT hits: {}\tTime: {}ms", depth, nodes, tt_hits, duration.as_millis()); 
 }
 
-fn go_perft(depth: u8, mut game: Game, detail: bool) {
+fn go_perft(depth: u8, mut pos: Position, detail: bool) {
     let start = SystemTime::now();
-    let result = perft(&mut game, depth, detail);
+    let result = perft(&mut pos, depth, detail);
     let duration = start.elapsed().unwrap();
     println!(" Found {} moves for depth {} in {}ms", result, depth, duration.as_millis());
 }
 
 fn psuite() {
     println!(" Performance test running...");
-    let mut game = Game::new_from_start_pos();
+    let mut game = Position::new_from_start_pos();
 
     //startpos
     let start = SystemTime::now();
@@ -313,7 +308,7 @@ fn psuite() {
     println!(" Perft on starting position at depth 5 found in {}ms", duration1.as_millis());
 
     //Kiwipete
-    let mut game = Game::new_from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 10").unwrap();
+    let mut game = Position::new_from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 10").unwrap();
     let start = SystemTime::now();
     let r2 = perft(&mut game, 4, false);
     let duration2 = start.elapsed().unwrap();
@@ -321,7 +316,7 @@ fn psuite() {
     println!(" Perft on Kiwipete at depth 4 found in {}ms", duration2.as_millis());
 
     //Position 3
-    let mut game = Game::new_from_fen("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 10").unwrap();
+    let mut game = Position::new_from_fen("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 10").unwrap();
     let start = SystemTime::now();
     let r3 = perft(&mut game, 6, false);
     let duration3 = start.elapsed().unwrap();
@@ -329,7 +324,7 @@ fn psuite() {
     println!(" Perft on Position 3 at depth 6 found in {}ms", duration3.as_millis());
 
     //Position 4
-    let mut game = Game::new_from_fen("r2q1rk1/pP1p2pp/Q4n2/bbp1p3/Np6/1B3NBn/pPPP1PPP/R3K2R b KQ - 0 1").unwrap();
+    let mut game = Position::new_from_fen("r2q1rk1/pP1p2pp/Q4n2/bbp1p3/Np6/1B3NBn/pPPP1PPP/R3K2R b KQ - 0 1").unwrap();
     let start = SystemTime::now();
     let r4 = perft(&mut game, 5, false);
     let duration4 = start.elapsed().unwrap();
@@ -337,7 +332,7 @@ fn psuite() {
     println!(" Perft on Position 4 at depth 5 found in {}ms", duration4.as_millis());
 
     //Position 5
-    let mut game = Game::new_from_fen("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8").unwrap();
+    let mut game = Position::new_from_fen("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8").unwrap();
     let start = SystemTime::now();
     let r5 = perft(&mut game, 4, false);
     let duration5 = start.elapsed().unwrap();
@@ -345,7 +340,7 @@ fn psuite() {
     println!(" Perft on Position 5 at depth 4 found in {}ms", duration5.as_millis());
 
     //Position 6
-    let mut game = Game::new_from_fen("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10").unwrap();
+    let mut game = Position::new_from_fen("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10").unwrap();
     let start = SystemTime::now();
     let r6 = perft(&mut game, 4, false);
     let duration6 = start.elapsed().unwrap();
@@ -363,7 +358,7 @@ fn psuite() {
 
 fn psuite_long() {
     println!(" Long performance test running...");
-    let mut game = Game::new_from_start_pos();
+    let mut game = Position::new_from_start_pos();
 
     //startpos
     let start = SystemTime::now();
@@ -373,7 +368,7 @@ fn psuite_long() {
     println!(" Perft on starting position at depth 6 found in {}ms", duration1.as_millis());
 
     //Kiwipete
-    let mut game = Game::new_from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 10").unwrap();
+    let mut game = Position::new_from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 10").unwrap();
     let start = SystemTime::now();
     let r2 = perft(&mut game, 5, false);
     let duration2 = start.elapsed().unwrap();
@@ -381,7 +376,7 @@ fn psuite_long() {
     println!(" Perft on Kiwipete at depth 5 found in {}ms", duration2.as_millis());
 
     //Position 3
-    let mut game = Game::new_from_fen("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 10").unwrap();
+    let mut game = Position::new_from_fen("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 10").unwrap();
     let start = SystemTime::now();
     let r3 = perft(&mut game, 7, false);
     let duration3 = start.elapsed().unwrap();
@@ -389,7 +384,7 @@ fn psuite_long() {
     println!(" Perft on Position 3 at depth 7 found in {}ms", duration3.as_millis());
 
     //Position 4
-    let mut game = Game::new_from_fen("r2q1rk1/pP1p2pp/Q4n2/bbp1p3/Np6/1B3NBn/pPPP1PPP/R3K2R b KQ - 0 1").unwrap();
+    let mut game = Position::new_from_fen("r2q1rk1/pP1p2pp/Q4n2/bbp1p3/Np6/1B3NBn/pPPP1PPP/R3K2R b KQ - 0 1").unwrap();
     let start = SystemTime::now();
     let r4 = perft(&mut game, 6, false);
     let duration4 = start.elapsed().unwrap();
@@ -397,7 +392,7 @@ fn psuite_long() {
     println!(" Perft on Position 4 at depth 6 found in {}ms", duration4.as_millis());
 
     //Position 5
-    let mut game = Game::new_from_fen("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8").unwrap();
+    let mut game = Position::new_from_fen("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8").unwrap();
     let start = SystemTime::now();
     let r5 = perft(&mut game, 5, false);
     let duration5 = start.elapsed().unwrap();
@@ -405,7 +400,7 @@ fn psuite_long() {
     println!(" Perft on Position 5 at depth 5 found in {}ms", duration5.as_millis());
 
     //Position 6
-    let mut game = Game::new_from_fen("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10").unwrap();
+    let mut game = Position::new_from_fen("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10").unwrap();
     let start = SystemTime::now();
     let r6 = perft(&mut game, 5, false);
     let duration6 = start.elapsed().unwrap();
