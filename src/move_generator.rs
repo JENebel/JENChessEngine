@@ -6,11 +6,12 @@ const MOVE_LIST_SIZE: usize = 256; //Maybe 128?
 #[derive(PartialEq)]
 pub enum MoveTypes {
     All,
-    Captures
+    Captures,
+    Done
 }
 
 pub struct MoveGenerator<'a> {
-    pos: &'a mut Position,
+    pos: &'a Position,
     moves: [Move; MOVE_LIST_SIZE],
     insert_index: usize,
     extract_index: usize,
@@ -21,7 +22,7 @@ pub struct MoveGenerator<'a> {
 
 impl <'a>MoveGenerator<'a> {
     ///Initializes the generator to a position
-    pub fn initialize(pos: &'a mut Position, move_types: MoveTypes) -> Self {
+    pub fn initialize(pos: &'a Position, move_types: MoveTypes) -> Self {
         Self {
             pos: pos,
             moves: [NULL_MOVE; MOVE_LIST_SIZE],
@@ -37,31 +38,15 @@ impl <'a>MoveGenerator<'a> {
         todo!()
     }
 
-    ///Indicates whether the move generator still contains moves
-    pub fn has_next(&mut self) -> bool {
-        todo!()
-    }
-
     ///Gets next move, best first. Dynamically generates moves in phases lazily sorted. Returns NULL_MOVE, when empty
     pub fn get_next_move(&mut self, sort: bool) -> Move {
         //We have run out
-        if self.extract_index >= self.insert_index {
-            match self.phase {
-                MoveTypes::All => return NULL_MOVE,
-                MoveTypes::Captures => { 
-                    //Iterate phase or finish generation depending on what moves are wanted
-                    if self.move_types == MoveTypes::All {
-                        self.phase = MoveTypes::All
-                    } else {
-                        return NULL_MOVE
-                    }
-                }
-            }
-
+        if self.extract_index == self.insert_index {
             //Generate more moves
             match self.phase {
-                MoveTypes::All => self.generate_non_captures(),
-                MoveTypes::Captures => self.generate_captures(),
+                MoveTypes::Captures => {self.generate_captures(); return self.get_next_move(sort)},
+                MoveTypes::All => if self.move_types == MoveTypes::All {self.generate_non_captures(); return self.get_next_move(sort)} else { return NULL_MOVE },
+                MoveTypes::Done => return NULL_MOVE
             }
         }
 
@@ -103,12 +88,397 @@ impl <'a>MoveGenerator<'a> {
 
     ///Generates capturing moves and adds them to the list
     fn generate_captures(&mut self) {
-        todo!()
+        let mut from_sq: u8;
+        let mut to_sq:   u8;
+
+        let mut attacks: Bitboard;
+
+        let mut pawn_bitboard;
+        let mut rook_bitboard;
+        let mut knight_bitboard;
+        let mut bishop_bitboard;
+        let mut queen_bitboard;
+        let mut king_bitboard;
+
+        let opponent_occupancies: Bitboard;
+
+        let rook;
+        let knight;
+        let bishop;
+        let queen;
+        let king;
+
+        //Color specific
+        //WHITE
+        if self.pos.active_player == Color::White {
+            opponent_occupancies = self.pos.black_occupancies;
+            pawn_bitboard =     self.pos.get_piece_bitboard(Piece::WhitePawn);
+            rook_bitboard =     self.pos.get_piece_bitboard(Piece::WhiteRook);
+            knight_bitboard =   self.pos.get_piece_bitboard(Piece::WhiteKnight);
+            bishop_bitboard =   self.pos.get_piece_bitboard(Piece::WhiteBishop);
+            queen_bitboard =    self.pos.get_piece_bitboard(Piece::WhiteQueen);
+            king_bitboard =     self.pos.get_piece_bitboard(Piece::WhiteKing);
+
+            rook =   Piece::WhiteRook as u8;
+            knight = Piece::WhiteKnight as u8;
+            bishop = Piece::WhiteBishop as u8;
+            queen =  Piece::WhiteQueen as u8;
+            king =   Piece::WhiteKing as u8;
+
+            //Pawn captures
+            while !pawn_bitboard.is_empty() {
+                from_sq = pawn_bitboard.extract_bit();
+
+                //Regular
+                attacks = get_pawn_attack_table(from_sq, Color::White);
+
+                //Enpassant
+                if self.pos.enpassant_square != Square::None && !attacks.and(Bitboard::from_u64(1 << self.pos.enpassant_square as u8)).is_empty(){
+                    self.score_and_add_capture_move(Move::new(from_sq, self.pos.enpassant_square as u8, Piece::WhitePawn as u8, Piece::None as u8, true, false, true, false));
+                }
+
+                //Overlap with opponent occupancies
+                attacks = attacks.and(opponent_occupancies);
+
+                while !attacks.is_empty() {
+                    to_sq = attacks.extract_bit();
+                    //Regular captures
+                    if to_sq >= 8 {
+                        self.score_and_add_capture_move(Move::new(from_sq, to_sq, Piece::WhitePawn as u8, Piece::None as u8, true, false, false, false));
+                    }
+                }
+            }
+        }
+        //BLACK
+        else {
+            opponent_occupancies = self.pos.white_occupancies;
+            pawn_bitboard = self.pos.get_piece_bitboard(Piece::BlackPawn);
+            rook_bitboard = self.pos.get_piece_bitboard(Piece::BlackRook);
+            knight_bitboard = self.pos.get_piece_bitboard(Piece::BlackKnight);
+            bishop_bitboard = self.pos.get_piece_bitboard(Piece::BlackBishop);
+            queen_bitboard = self.pos.get_piece_bitboard(Piece::BlackQueen);
+            king_bitboard = self.pos.get_piece_bitboard(Piece::BlackKing);
+
+            rook =   Piece::BlackRook as u8;
+            knight = Piece::BlackKnight as u8;
+            bishop = Piece::BlackBishop as u8;
+            queen =  Piece::BlackQueen as u8;
+            king =   Piece::BlackKing as u8;
+
+            //Pawn captures
+            while !pawn_bitboard.is_empty() {
+                from_sq = pawn_bitboard.extract_bit();
+
+                //Regular
+                attacks = get_pawn_attack_table(from_sq, Color::Black);
+
+                //Enpassant
+                if self.pos.enpassant_square != Square::None && !attacks.and(Bitboard::from_u64(1 << self.pos.enpassant_square as u8)).is_empty(){
+                    self.score_and_add_capture_move(Move::new(from_sq, self.pos.enpassant_square as u8, Piece::WhitePawn as u8, Piece::None as u8, true, false, true, false));
+                }
+
+                //Overlap with opponent occupancies
+                attacks = attacks.and(opponent_occupancies);
+
+                while !attacks.is_empty() {
+                    to_sq = attacks.extract_bit();
+                    //Regular captures
+                    if to_sq >= 8 {
+                        self.score_and_add_capture_move(Move::new(from_sq, to_sq, Piece::WhitePawn as u8, Piece::None as u8, true, false, false, false));
+                    }
+                }
+            }
+        }
+
+        //Knight attacks
+        while !knight_bitboard.is_empty() {
+            from_sq = knight_bitboard.extract_bit();
+
+            //Raw attack table
+            attacks = get_knight_attack_table(from_sq);
+
+            //Extract only captures and loop over them
+            attacks = attacks.and(opponent_occupancies);
+            while !attacks.is_empty() {
+                to_sq = attacks.extract_bit();
+                self.score_and_add_capture_move(Move::new(from_sq, to_sq, knight, Piece::None as u8, true, false, false, false))
+            }
+        }
+
+        //Bishop attacks
+        while !bishop_bitboard.is_empty() {
+            from_sq = bishop_bitboard.extract_bit();
+
+            //Raw attack table
+            attacks = get_bishop_attack_table(from_sq, self.pos.all_occupancies);  
+
+            //Extract only captures and loop over them
+            attacks = attacks.and(opponent_occupancies);
+            while !attacks.is_empty() {
+                to_sq = attacks.extract_bit();
+                self.score_and_add_capture_move(Move::new(from_sq, to_sq, bishop, Piece::None as u8, true, false, false, false))
+            }
+        }
+
+        //Rook attacks
+        while !rook_bitboard.is_empty() {
+            from_sq = rook_bitboard.extract_bit();
+
+            //Raw attack table
+            attacks = get_rook_attack_table(from_sq, self.pos.all_occupancies);
+
+            //Extract only captures and loop over them
+            attacks = attacks.and(opponent_occupancies);
+            while !attacks.is_empty() {
+                to_sq = attacks.extract_bit();
+                self.score_and_add_capture_move(Move::new(from_sq, to_sq, rook, Piece::None as u8, true, false, false, false))
+            }
+        }
+
+        //Queen attacks
+        while !queen_bitboard.is_empty() {
+            from_sq = queen_bitboard.extract_bit();
+
+            //Raw attack table
+            attacks = get_queen_attack_table(from_sq, self.pos.all_occupancies);
+
+            //Extract only captures and loop over them
+            attacks = attacks.and(opponent_occupancies);
+            while !attacks.is_empty() {
+                to_sq = attacks.extract_bit();
+                self.score_and_add_capture_move(Move::new(from_sq, to_sq, queen, Piece::None as u8, true, false, false, false))
+            }
+        }
+
+        //King attacks
+        while !king_bitboard.is_empty() {
+            from_sq = king_bitboard.extract_bit();
+
+            //Raw attack table
+            attacks = get_king_attack_table(from_sq,);
+
+            //Extract only captures and loop over them
+            attacks = attacks.and(opponent_occupancies);
+            while !attacks.is_empty() {
+                to_sq = attacks.extract_bit();
+                self.score_and_add_capture_move(Move::new(from_sq, to_sq, king, Piece::None as u8, true, false, false, false))
+            }
+        }
+        
+        self.phase = MoveTypes::All;
     }
 
     ///Generate quiet moves and adds them to the list
     fn generate_non_captures(&mut self) {
-        todo!()
+        let mut from_sq: u8;
+        let mut to_sq:   u8;
+
+        let mut quiet: Bitboard;
+
+        let mut pawn_bitboard;
+        let mut rook_bitboard;
+        let mut knight_bitboard;
+        let mut bishop_bitboard;
+        let mut queen_bitboard;
+        let mut king_bitboard;
+
+        let pawn;
+        let rook;
+        let knight;
+        let bishop;
+        let queen;
+        let king;
+
+        //Color specific
+        //WHITE
+        if self.pos.active_player == Color::White {
+            pawn_bitboard =     self.pos.get_piece_bitboard(Piece::WhitePawn);
+            rook_bitboard =     self.pos.get_piece_bitboard(Piece::WhiteRook);
+            knight_bitboard =   self.pos.get_piece_bitboard(Piece::WhiteKnight);
+            bishop_bitboard =   self.pos.get_piece_bitboard(Piece::WhiteBishop);
+            queen_bitboard =    self.pos.get_piece_bitboard(Piece::WhiteQueen);
+            king_bitboard =     self.pos.get_piece_bitboard(Piece::WhiteKing);
+
+            pawn =   Piece::WhitePawn as u8;
+            rook =   Piece::WhiteRook as u8;
+            knight = Piece::WhiteKnight as u8;
+            bishop = Piece::WhiteBishop as u8;
+            queen =  Piece::WhiteQueen as u8;
+            king =   Piece::WhiteKing as u8;
+
+            //Pawn moves
+            while !pawn_bitboard.is_empty() {
+                from_sq = pawn_bitboard.extract_bit();
+                to_sq = (from_sq as i8 - 8) as u8;
+                //Quiet
+                if !self.pos.all_occupancies.get_bit(to_sq) {
+                    //to_sq is empty
+                    if to_sq >= 8 {
+                        //Quiet move
+                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::None as u8, false, false, false, false));
+
+                        //Double push
+                        to_sq = (to_sq as i8 - 8) as u8;
+                        if !self.pos.all_occupancies.get_bit(to_sq) && from_sq / 8 == 6 {
+                            self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::None as u8, false, true, false, false));
+                        }
+                    }
+                    //Promotions
+                    else {
+                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::WhiteQueen as u8,  false, false, false, false));
+                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::WhiteKnight as u8, false, false, false, false));
+                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::WhiteRook as u8,   false, false, false, false));
+                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::WhiteBishop as u8, false, false, false, false))
+                    }
+                }
+            }
+
+            //Castling kingside
+            if self.pos.castling_ability & (CastlingAbility::WhiteKingSide as u8) != 0 &&              //castling ability
+                (self.pos.all_occupancies.and(Bitboard::from_u64(6917529027641081856))).is_empty() &&   //f1 and g1 are free. 6917529027641081856 is f1 and g1 set
+                !self.pos.is_square_attacked(Square::e1 as u8, Color::Black) &&                         //e1 is notunder attack
+                !self.pos.is_square_attacked(Square::f1 as u8, Color::Black) {                          //f1 is not under attack
+
+                    self.score_and_add_quiet_move(Move::new(Square::e1 as u8, Square::g1 as u8, Piece::WhiteKing as u8, Piece::None as u8, false, false, false, true))
+            }
+            //Castling queen
+            if  self.pos.castling_ability & (CastlingAbility::WhiteQueenSide as u8) != 0 &&             //castling ability
+                (self.pos.all_occupancies.and(Bitboard::from_u64(1008806316530991104))).is_empty() &&   //d1, c1 and b1 are free. 1008806316530991104 is d1, c1 and b1 set
+                !self.pos.is_square_attacked(Square::e1 as u8, Color::Black) &&                         //e1 is notunder attack
+                !self.pos.is_square_attacked(Square::d1 as u8, Color::Black) {                          //d1 is not under attack
+
+                    self.score_and_add_quiet_move(Move::new(Square::e1 as u8, Square::c1 as u8, Piece::WhiteKing as u8, Piece::None as u8, false, false, false, true))
+            }
+        }
+        //BLACK
+        else {
+            pawn_bitboard = self.pos.get_piece_bitboard(Piece::BlackPawn);
+            rook_bitboard = self.pos.get_piece_bitboard(Piece::BlackRook);
+            knight_bitboard = self.pos.get_piece_bitboard(Piece::BlackKnight);
+            bishop_bitboard = self.pos.get_piece_bitboard(Piece::BlackBishop);
+            queen_bitboard = self.pos.get_piece_bitboard(Piece::BlackQueen);
+            king_bitboard = self.pos.get_piece_bitboard(Piece::BlackKing);
+
+            pawn =   Piece::BlackPawn as u8;
+            rook =   Piece::BlackRook as u8;
+            knight = Piece::BlackKnight as u8;
+            bishop = Piece::BlackBishop as u8;
+            queen =  Piece::BlackQueen as u8;
+            king =   Piece::BlackKing as u8;
+
+            //Pawn moves
+            while !pawn_bitboard.is_empty() {
+                from_sq = pawn_bitboard.extract_bit();
+                to_sq = (from_sq as i8 + 8) as u8;
+                //Quiet
+                if !self.pos.all_occupancies.get_bit(to_sq) {
+                    //to_sq is empty
+                    if to_sq <= 55 {
+                        //Quiet move
+                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::None as u8, false, false, false, false));
+
+                        //Double push
+                        to_sq = (to_sq as i8 + 8) as u8;
+                        if !self.pos.all_occupancies.get_bit(to_sq) && from_sq / 8 == 1 {
+                            self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::None as u8, false, true, false, false));
+                        }
+                    }
+                    //Promotions
+                    else {
+                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::BlackQueen as u8,  false, false, false, false));
+                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::BlackKnight as u8, false, false, false, false));
+                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::BlackRook as u8,   false, false, false, false));
+                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::BlackBishop as u8, false, false, false, false))
+                    }
+                }
+            }
+
+            //Castling kingside
+            if  self.pos.castling_ability & (CastlingAbility::BlackKingSide as u8) != 0 &&              //castling ability
+                (self.pos.all_occupancies.and(Bitboard::from_u64(96))).is_empty() &&                    //f8 and g8 are free. 96 is f1 and g1 set
+                !self.pos.is_square_attacked(Square::e8 as u8, Color::White) &&                         //e8 is notunder attack
+                !self.pos.is_square_attacked(Square::f8 as u8, Color::White) {                          //f8 is not under attack
+
+                    self.score_and_add_quiet_move(Move::new(Square::e8 as u8, Square::g8 as u8, Piece::BlackKing as u8, Piece::None as u8, false, false, false, true))
+            }
+            //Castling queen
+            if  self.pos.castling_ability & (CastlingAbility::BlackQueenSide as u8) != 0 &&             //castling ability
+                (self.pos.all_occupancies.and(Bitboard::from_u64(14))).is_empty() &&                    //d8, c8 and b8 are free. 14 is f1 and g1 set
+                !self.pos.is_square_attacked(Square::e8 as u8, Color::White) &&                         //e8 is notunder attack
+                !self.pos.is_square_attacked(Square::d8 as u8, Color::White) {                          //d8 is not under attack
+
+                    self.score_and_add_quiet_move(Move::new(Square::e8 as u8, Square::c8 as u8, Piece::BlackKing as u8, Piece::None as u8, false, false, false, true))
+            }
+        }
+
+        let not_occ = self.pos.all_occupancies.not();
+
+        //Knight attacks
+        while !knight_bitboard.is_empty() {
+            from_sq = knight_bitboard.extract_bit();
+
+            //Quiet moves
+            quiet = get_knight_attack_table(from_sq).and(not_occ);
+
+            while !quiet.is_empty() {
+                to_sq = quiet.extract_bit();
+                self.score_and_add_quiet_move(Move::new(from_sq, to_sq, knight, Piece::None as u8, false, false, false, false))
+            }
+        }
+
+        //Bishop attacks
+        while !bishop_bitboard.is_empty() {
+            from_sq = bishop_bitboard.extract_bit();
+
+            //Quiet moves
+            quiet = get_bishop_attack_table(from_sq, self.pos.all_occupancies).and(not_occ);
+
+            while !quiet.is_empty() {
+                to_sq = quiet.extract_bit();
+                self.score_and_add_quiet_move(Move::new(from_sq, to_sq, bishop, Piece::None as u8, false, false, false, false))
+            }
+        }
+
+        //Rook attacks
+        while !rook_bitboard.is_empty() {
+            from_sq = rook_bitboard.extract_bit();
+
+            //Quiet moves
+            quiet = get_rook_attack_table(from_sq, self.pos.all_occupancies).and(not_occ);
+
+            while !quiet.is_empty() {
+                to_sq = quiet.extract_bit();
+                self.score_and_add_quiet_move(Move::new(from_sq, to_sq, rook, Piece::None as u8, false, false, false, false))
+            }
+        }
+
+        //Queen attacks
+        while !queen_bitboard.is_empty() {
+            from_sq = queen_bitboard.extract_bit();
+
+            //Quiet moves
+            quiet = get_queen_attack_table(from_sq, self.pos.all_occupancies).and(not_occ);
+
+            while !quiet.is_empty() {
+                to_sq = quiet.extract_bit();
+                self.score_and_add_quiet_move(Move::new(from_sq, to_sq, queen, Piece::None as u8, false, false, false, false))
+            }
+        }
+
+        //King attacks
+        while !king_bitboard.is_empty() {
+            from_sq = king_bitboard.extract_bit();
+
+            //Quiet moves
+            quiet = get_king_attack_table(from_sq).and(not_occ);
+
+            while !quiet.is_empty() {
+                to_sq = quiet.extract_bit();
+                self.score_and_add_quiet_move(Move::new(from_sq, to_sq, king, Piece::None as u8, false, false, false, false))
+            }
+        }
+
+        self.phase = MoveTypes::Done;
     }
 
     #[inline(always)]
@@ -119,13 +489,15 @@ impl <'a>MoveGenerator<'a> {
     }
 
     ///Scores a capturing move
-    fn score_and_add_capture_move(&mut self) {
-        todo!()
+    fn score_and_add_capture_move(&mut self, cmove: Move) {
+        self.add_move(cmove)
+        //todo!()
     }
 
     ///Scores a quiet move
-    fn score_and_add_quiet_move(&mut self) {
-        todo!()
+    fn score_and_add_quiet_move(&mut self, cmove: Move) {
+        self.add_move(cmove)
+        //todo!()
     }
 
     ///Finds the associated with a uci string representation. eg. B2B1q

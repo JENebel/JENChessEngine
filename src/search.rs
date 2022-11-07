@@ -14,7 +14,7 @@ const INFINITY: i32 = 50000;
 const INPUT_POLL_INTERVAL: u64 = 16383; //Node interval to check if search aborted
 
 pub fn find_random_move(pos: &mut Position) {
-    let moves = MoveGenerator::initialize(&mut pos, MoveTypes::All).collect();
+    let moves = MoveGenerator::initialize(&pos, MoveTypes::All).collect();
     let rand = rand::thread_rng().gen_range(0..moves.len());
     print!("bestmove {}\n", moves[rand].to_uci());
 }
@@ -35,7 +35,7 @@ impl SearchResult {
 }
 
 //Start a search, max_time = -1 for no limit
-pub fn search(game: &mut Position, depth: i8, max_time: i64, io_receiver: &IoWrapper, tt: &mut TranspositionTable, envir: &mut SearchEnv) -> SearchResult {
+pub fn search(pos: &mut Position, depth: i8, tt: &mut TranspositionTable, envir: &mut SearchEnv) -> SearchResult {
     let mut score = 0;
 
     let mut alpha = -INFINITY;
@@ -47,7 +47,7 @@ pub fn search(game: &mut Position, depth: i8, max_time: i64, io_receiver: &IoWra
     while current_depth <= max_depth as u8 {
         envir.follow_pv = true;
 
-        score = negamax(game, current_depth as u8, alpha, beta, tt, &mut envir);
+        score = negamax(pos, current_depth as u8, alpha, beta, tt, envir);
 
         if envir.stopping { break }
 
@@ -167,10 +167,11 @@ fn negamax(pos: &mut Position, depth: u8, alpha: i32, beta: i32, tt: &mut Transp
 
     let mut moves_searched = 0;
 
-    while moves.has_next() {
+    loop {
         let m = moves.get_next_move(true);
+        if m == NULL_MOVE { break }
         
-        let mut copy = pos.clone();
+        let mut copy = *pos;
 
         envir.ply += 1;
 
@@ -234,7 +235,7 @@ fn negamax(pos: &mut Position, depth: u8, alpha: i32, beta: i32, tt: &mut Transp
                 }
     
                 //Record TT entry
-                tt.record(pos.zobrist_hash, beta, depth, HashFlag::Beta, envir.ply);
+                tt.record(pos.zobrist_hash, beta, depth, HashFlag::Beta, envir.ply, NULL_MOVE); //SHOULD NOT BE NULL MOVE!
     
                 return beta;
             }
@@ -262,7 +263,7 @@ fn negamax(pos: &mut Position, depth: u8, alpha: i32, beta: i32, tt: &mut Transp
     }
     
     //Record TT entry
-    tt.record(pos.zobrist_hash, temp_alpha, depth, hash_flag, envir.ply);
+    tt.record(pos.zobrist_hash, temp_alpha, depth, hash_flag, envir.ply, NULL_MOVE); //SHOULD NOT BE NULL MOVE!
 
     temp_alpha
 }
@@ -292,13 +293,14 @@ fn quiescence(pos: &mut Position, alpha: i32, beta: i32, envir: &mut SearchEnv) 
         }
     }
 
-    let mut moves = MoveGenerator::initialize(pos, MoveTypes::Captures);
+    let mut moves = MoveGenerator::initialize(&pos, MoveTypes::Captures);
 
-    while moves.has_next() {
+    loop {
         let m = moves.get_next_move(true);
+        if m == NULL_MOVE { break }
 
         let mut copy = *pos;
-        if !copy.make_move(&m, envir) {
+        if !copy.make_move(&m, envir.repetition_table) {
             continue;
         }
         

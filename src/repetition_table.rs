@@ -1,3 +1,4 @@
+#[derive(Copy, Clone)]
 pub struct RepetitionTable {
     pub table: [u64; 1000],
     pub index: usize

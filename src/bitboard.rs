@@ -92,6 +92,10 @@ impl Bitboard {
         Self { bits: self.bits | other }
     }
 
+    pub fn not(&self) -> Self {
+        Self { bits: !self.bits }
+    }
+
     pub fn pop_count(&mut self) -> u32 {
         self.bits.count_ones()
     }
