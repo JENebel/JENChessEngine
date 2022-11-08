@@ -14,7 +14,7 @@ const INFINITY: i32 = 50000;
 const INPUT_POLL_INTERVAL: u64 = 16383; //Node interval to check if search aborted
 
 pub fn find_random_move(pos: &mut Position) {
-    let moves = MoveGenerator::initialize(&pos, MoveTypes::All).collect();
+    let moves = MoveGenerator::all_moves(pos);
     let rand = rand::thread_rng().gen_range(0..moves.len());
     print!("bestmove {}\n", moves[rand].to_uci());
 }
@@ -45,8 +45,6 @@ pub fn search(pos: &mut Position, depth: i8, tt: &mut TranspositionTable, envir:
     let max_depth = if depth == -1 { MAX_PLY as u8 } else { depth as u8 };
 
     while current_depth <= max_depth as u8 {
-        envir.follow_pv = true;
-
         score = negamax(pos, current_depth as u8, alpha, beta, tt, envir);
 
         if envir.stopping { break }
@@ -71,20 +69,34 @@ pub fn search(pos: &mut Position, depth: i8, tt: &mut TranspositionTable, envir:
             print!("info score mate {} depth {} nodes {} time {} pv ", (MATE_VALUE - score) / 2 + 1, current_depth, envir.nodes, envir.start_time.elapsed().unwrap().as_millis());
         }
         else {
-            print!("info score cp {} depth {} nodes {} time {} pv ", score, current_depth, envir.nodes, envir.start_time.elapsed().unwrap().as_millis());
+            print!("info score cp {} depth {} nodes {} time {} pv", score, current_depth, envir.nodes, envir.start_time.elapsed().unwrap().as_millis());
         }
 
-        for i in 0..envir.pv_lengths[0] {
-            print!("{} ", envir.pv_table[0][i].to_uci());
-        }
+        //print_pv_line(tt, *pos);
         print!("\n");
         
         current_depth += 1;
     }
 
-    print!("bestmove {}\n", envir.pv_table[0][0].to_uci());
+    let best_move = tt.probe_best_move(pos.zobrist_hash);
 
-    SearchResult::new(envir.pv_table[0][0], envir.nodes, score, current_depth - 1, !envir.stopping, envir.tt_hits)
+    print!("bestmove {}\n", best_move.to_uci());
+
+    SearchResult::new(best_move, envir.nodes, score, current_depth - 1, !envir.stopping, envir.tt_hits)
+}
+
+fn print_pv_line(tt: &TranspositionTable, mut pos: Position){
+    let mut rep_table = RepetitionTable::new();
+    loop {
+        let pv = tt.probe_best_move(pos.zobrist_hash);
+        if pv == NULL_MOVE {
+            break;
+        }
+
+        print!(" {}", pv.to_uci());
+
+        pos.make_move(&pv, &mut rep_table);
+    }
 }
 
 #[inline]
@@ -100,8 +112,6 @@ fn negamax(pos: &mut Position, depth: u8, alpha: i32, beta: i32, tt: &mut Transp
             return score;
         }
     }
-
-    envir.pv_lengths[envir.ply as usize] = envir.ply as usize;
 
     if envir.ply > 0 && envir.repetition_table.is_now_in_threefold_repetition() {
         return 0;
@@ -130,6 +140,8 @@ fn negamax(pos: &mut Position, depth: u8, alpha: i32, beta: i32, tt: &mut Transp
     let n_depth = if in_check { depth + 1 } else { depth };
 
     let mut temp_alpha = alpha;
+
+    let mut best_move = NULL_MOVE;
 
     let mut legal_moves = 0;
 
@@ -164,6 +176,7 @@ fn negamax(pos: &mut Position, depth: u8, alpha: i32, beta: i32, tt: &mut Transp
     }
 
     let mut moves = MoveGenerator::initialize(pos, MoveTypes::All);
+    moves.add_pv_move(tt);
 
     let mut moves_searched = 0;
 
@@ -223,8 +236,7 @@ fn negamax(pos: &mut Position, depth: u8, alpha: i32, beta: i32, tt: &mut Transp
         if envir.stopping { return 0 }
 
         if score > temp_alpha {
-            //Insert PV node
-            envir.insert_pv_node(m);
+            best_move = m;
 
             //Beta cut-off
             if score >= beta {
@@ -235,7 +247,7 @@ fn negamax(pos: &mut Position, depth: u8, alpha: i32, beta: i32, tt: &mut Transp
                 }
     
                 //Record TT entry
-                tt.record(pos.zobrist_hash, beta, depth, HashFlag::Beta, envir.ply, NULL_MOVE); //SHOULD NOT BE NULL MOVE!
+                tt.record(pos.zobrist_hash, beta, depth, HashFlag::Beta, envir.ply, best_move);
     
                 return beta;
             }
@@ -255,15 +267,15 @@ fn negamax(pos: &mut Position, depth: u8, alpha: i32, beta: i32, tt: &mut Transp
     //Mate & Draw
     if legal_moves == 0 {
         if in_check {
-            return -MATE_VALUE + envir.ply as i32;
+            temp_alpha = -MATE_VALUE + envir.ply as i32;
         }
         else {
-            return 0;
+            temp_alpha = 0;
         }
     }
     
     //Record TT entry
-    tt.record(pos.zobrist_hash, temp_alpha, depth, hash_flag, envir.ply, NULL_MOVE); //SHOULD NOT BE NULL MOVE!
+    tt.record(pos.zobrist_hash, temp_alpha, depth, hash_flag, envir.ply, best_move); //SHOULD NOT BE NULL MOVE!
 
     temp_alpha
 }

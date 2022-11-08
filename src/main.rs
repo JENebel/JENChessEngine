@@ -108,7 +108,7 @@ fn main() {
                 "move" => {
                     while !split.peek().is_none() {
                         let mov = split.next().unwrap();
-                        let parsed = MoveGenerator::initialize(&mut pos, MoveTypes::All).parse_move(mov.to_string());
+                        let parsed = MoveGenerator::parse_move(&pos, mov.to_string());
                         if parsed.is_none() {
                             panic!("Illegal move");
                         }
@@ -156,7 +156,7 @@ fn parse_position(args: String) -> Option<(Position, RepetitionTable)> {
         split.next();
         while !split.peek().is_none() {
             let mov = split.next().unwrap();
-            let parsed = MoveGenerator::initialize(&pos, MoveTypes::All).parse_move(mov.to_string());
+            let parsed = MoveGenerator::parse_move(&pos, mov.to_string());
             if parsed.is_none() {
                 panic!("Illegal move");
             }

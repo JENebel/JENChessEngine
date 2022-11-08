@@ -3,6 +3,23 @@ use super::*;
 ///The maximum length of the moveList. Array is initialized to this
 const MOVE_LIST_SIZE: usize = 256; //Maybe 128?
 
+///[attacker][victim]
+pub const MVV_LVA: [[u8; 12]; 12] = [
+    [15, 25, 35, 45, 55, 65,  15, 25, 35, 45, 55, 65],
+    [14, 24, 34, 44, 54, 64,  14, 24, 34, 44, 54, 64],
+    [13, 23, 33, 43, 53, 63,  13, 23, 33, 43, 53, 63],
+    [12, 22, 32, 42, 52, 62,  12, 22, 32, 42, 52, 62],
+    [11, 21, 31, 41, 51, 61,  11, 21, 31, 41, 51, 61],
+    [10, 20, 30, 40, 50, 60,  10, 20, 30, 40, 50, 60],
+    
+    [15, 25, 35, 45, 55, 65,  15, 25, 35, 45, 55, 65],
+    [14, 24, 34, 44, 54, 64,  14, 24, 34, 44, 54, 64],
+    [13, 23, 33, 43, 53, 63,  13, 23, 33, 43, 53, 63],
+    [12, 22, 32, 42, 52, 62,  12, 22, 32, 42, 52, 62],
+    [11, 21, 31, 41, 51, 61,  11, 21, 31, 41, 51, 61],
+    [10, 20, 30, 40, 50, 60,  10, 20, 30, 40, 50, 60],
+];
+
 #[derive(PartialEq)]
 pub enum MoveTypes {
     All,
@@ -34,8 +51,38 @@ impl <'a>MoveGenerator<'a> {
     }
 
     ///Generates all moves instantly, and returns them
-    pub fn collect(&mut self) -> Vec<Move>{
-        todo!()
+    pub fn all_moves(pos: &Position) -> Vec<Move>{
+        let mut moves = MoveGenerator::initialize(pos, MoveTypes::All);
+
+        let mut result = Vec::new();
+
+        loop {
+            let m = moves.get_next_move(false);
+
+            if m == NULL_MOVE {
+                return result
+            }
+
+            result.push(m)
+        }
+    }
+
+    ///Finds the associated with a uci string representation. eg. B2B1q
+    pub fn parse_move(pos: &Position, input: String) -> Option<Move> {
+        let mut moves = MoveGenerator::initialize(pos, MoveTypes::All);
+
+        loop {
+            let m = moves.get_next_move(false);
+            
+            if m == NULL_MOVE {
+                break
+            }
+            else if m.to_uci() == input {
+                return Some(m)
+            }
+        }
+
+        None
     }
 
     ///Gets next move, best first. Dynamically generates moves in phases lazily sorted. Returns NULL_MOVE, when empty
@@ -506,20 +553,34 @@ impl <'a>MoveGenerator<'a> {
     }
 
     ///Scores a capturing move
-    fn score_and_add_capture_move(&mut self, cmove: Move) {
+    fn score_and_add_capture_move(&mut self, mut cmove: Move) {
+        let start;
+        let end;
+        let mut taken = 0;
+        if self.pos.active_player == Color::White {
+            start = Piece::BlackPawn as usize;
+            end = Piece::BlackKing as usize;
+        }
+        else {
+            start = Piece::WhitePawn as usize;
+            end = Piece::WhiteKing as usize;
+        }
+
+        for bb in start..end {
+            if self.pos.bitboards[bb].get_bit(cmove.to_square()) {
+                taken = bb;
+                break;
+            }
+        }
+
+        cmove.set_score(MVV_LVA[cmove.piece() as usize][taken as usize]);
+
         self.add_move(cmove)
-        //todo!()
     }
 
     ///Scores a quiet move
     fn score_and_add_quiet_move(&mut self, cmove: Move) {
         self.add_move(cmove)
-        //todo!()
-    }
-
-    ///Finds the associated with a uci string representation. eg. B2B1q
-    pub fn parse_move(&mut self, input: String) -> Option<Move> {
-        todo!()
     }
 }
 
