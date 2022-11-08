@@ -102,6 +102,7 @@ impl <'a>MoveGenerator<'a> {
 
         let opponent_occupancies: Bitboard;
 
+        let pawn;
         let rook;
         let knight;
         let bishop;
@@ -119,6 +120,7 @@ impl <'a>MoveGenerator<'a> {
             queen_bitboard =    self.pos.get_piece_bitboard(Piece::WhiteQueen);
             king_bitboard =     self.pos.get_piece_bitboard(Piece::WhiteKing);
 
+            pawn =   Piece::WhitePawn as u8;
             rook =   Piece::WhiteRook as u8;
             knight = Piece::WhiteKnight as u8;
             bishop = Piece::WhiteBishop as u8;
@@ -134,7 +136,7 @@ impl <'a>MoveGenerator<'a> {
 
                 //Enpassant
                 if self.pos.enpassant_square != Square::None && !attacks.and(Bitboard::from_u64(1 << self.pos.enpassant_square as u8)).is_empty(){
-                    self.score_and_add_capture_move(Move::new(from_sq, self.pos.enpassant_square as u8, Piece::WhitePawn as u8, Piece::None as u8, true, false, true, false));
+                    self.score_and_add_capture_move(Move::new(from_sq, self.pos.enpassant_square as u8, pawn as u8, Piece::None as u8, true, false, true, false));
                 }
 
                 //Overlap with opponent occupancies
@@ -144,7 +146,14 @@ impl <'a>MoveGenerator<'a> {
                     to_sq = attacks.extract_bit();
                     //Regular captures
                     if to_sq >= 8 {
-                        self.score_and_add_capture_move(Move::new(from_sq, to_sq, Piece::WhitePawn as u8, Piece::None as u8, true, false, false, false));
+                        self.score_and_add_capture_move(Move::new(from_sq, to_sq, pawn, Piece::None as u8, true, false, false, false));
+
+                    //Promotions
+                    } else {
+                        self.score_and_add_capture_move(Move::new(from_sq, to_sq, pawn, Piece::WhiteQueen as u8,  true, false, false, false));
+                        self.score_and_add_capture_move(Move::new(from_sq, to_sq, pawn, Piece::WhiteKnight as u8, true, false, false, false));
+                        self.score_and_add_capture_move(Move::new(from_sq, to_sq, pawn, Piece::WhiteRook as u8,   true, false, false, false));
+                        self.score_and_add_capture_move(Move::new(from_sq, to_sq, pawn, Piece::WhiteBishop as u8, true, false, false, false))
                     }
                 }
             }
@@ -159,6 +168,7 @@ impl <'a>MoveGenerator<'a> {
             queen_bitboard = self.pos.get_piece_bitboard(Piece::BlackQueen);
             king_bitboard = self.pos.get_piece_bitboard(Piece::BlackKing);
 
+            pawn =   Piece::BlackPawn as u8;
             rook =   Piece::BlackRook as u8;
             knight = Piece::BlackKnight as u8;
             bishop = Piece::BlackBishop as u8;
@@ -174,7 +184,7 @@ impl <'a>MoveGenerator<'a> {
 
                 //Enpassant
                 if self.pos.enpassant_square != Square::None && !attacks.and(Bitboard::from_u64(1 << self.pos.enpassant_square as u8)).is_empty(){
-                    self.score_and_add_capture_move(Move::new(from_sq, self.pos.enpassant_square as u8, Piece::WhitePawn as u8, Piece::None as u8, true, false, true, false));
+                    self.score_and_add_capture_move(Move::new(from_sq, self.pos.enpassant_square as u8, pawn, Piece::None as u8, true, false, true, false));
                 }
 
                 //Overlap with opponent occupancies
@@ -183,8 +193,15 @@ impl <'a>MoveGenerator<'a> {
                 while !attacks.is_empty() {
                     to_sq = attacks.extract_bit();
                     //Regular captures
-                    if to_sq >= 8 {
-                        self.score_and_add_capture_move(Move::new(from_sq, to_sq, Piece::WhitePawn as u8, Piece::None as u8, true, false, false, false));
+                    if to_sq <= 55 {
+                        self.score_and_add_capture_move(Move::new(from_sq, to_sq, pawn, Piece::None as u8, true, false, false, false));
+
+                    //Promotions
+                    } else {
+                        self.score_and_add_capture_move(Move::new(from_sq, to_sq, pawn, Piece::BlackQueen as u8,  true, false, false, false));
+                        self.score_and_add_capture_move(Move::new(from_sq, to_sq, pawn, Piece::BlackKnight as u8, true, false, false, false));
+                        self.score_and_add_capture_move(Move::new(from_sq, to_sq, pawn, Piece::BlackRook as u8,   true, false, false, false));
+                        self.score_and_add_capture_move(Move::new(from_sq, to_sq, pawn, Piece::BlackBishop as u8, true, false, false, false))
                     }
                 }
             }
@@ -264,7 +281,7 @@ impl <'a>MoveGenerator<'a> {
                 self.score_and_add_capture_move(Move::new(from_sq, to_sq, king, Piece::None as u8, true, false, false, false))
             }
         }
-        
+
         self.phase = MoveTypes::All;
     }
 
@@ -395,7 +412,7 @@ impl <'a>MoveGenerator<'a> {
 
             //Castling kingside
             if  self.pos.castling_ability & (CastlingAbility::BlackKingSide as u8) != 0 &&              //castling ability
-                (self.pos.all_occupancies.and(Bitboard::from_u64(96))).is_empty() &&                    //f8 and g8 are free. 96 is f1 and g1 set
+                (self.pos.all_occupancies.and(Bitboard::from_u64(96))).is_empty() &&                    //f8 and g8 are free. 96 is f8 and g8 set
                 !self.pos.is_square_attacked(Square::e8 as u8, Color::White) &&                         //e8 is notunder attack
                 !self.pos.is_square_attacked(Square::f8 as u8, Color::White) {                          //f8 is not under attack
 
@@ -403,7 +420,7 @@ impl <'a>MoveGenerator<'a> {
             }
             //Castling queen
             if  self.pos.castling_ability & (CastlingAbility::BlackQueenSide as u8) != 0 &&             //castling ability
-                (self.pos.all_occupancies.and(Bitboard::from_u64(14))).is_empty() &&                    //d8, c8 and b8 are free. 14 is f1 and g1 set
+                (self.pos.all_occupancies.and(Bitboard::from_u64(14))).is_empty() &&                    //d8, c8 and b8 are free. 14 is d8, c8 and b8 set
                 !self.pos.is_square_attacked(Square::e8 as u8, Color::White) &&                         //e8 is notunder attack
                 !self.pos.is_square_attacked(Square::d8 as u8, Color::White) {                          //d8 is not under attack
 
