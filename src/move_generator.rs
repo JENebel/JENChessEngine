@@ -41,7 +41,7 @@ impl <'a>MoveGenerator<'a> {
     ///Initializes the generator to a position
     pub fn initialize(pos: &'a Position, move_types: MoveTypes) -> Self {
         Self {
-            pos: pos,
+            pos,
             moves: [NULL_MOVE; MOVE_LIST_SIZE],
             insert_index: 0,
             extract_index: 0,
@@ -51,13 +51,13 @@ impl <'a>MoveGenerator<'a> {
     }
 
     ///Generates all moves instantly, and returns them
-    pub fn all_moves(pos: &Position) -> Vec<Move>{
+    pub fn all_moves(pos: &Position, envir: &mut SearchEnv) -> Vec<Move>{
         let mut moves = MoveGenerator::initialize(pos, MoveTypes::All);
 
         let mut result = Vec::new();
 
         loop {
-            let m = moves.get_next_move(false);
+            let m = moves.get_next_move(false, &envir);
 
             if m == NULL_MOVE {
                 return result
@@ -68,11 +68,11 @@ impl <'a>MoveGenerator<'a> {
     }
 
     ///Finds the associated with a uci string representation. eg. B2B1q
-    pub fn parse_move(pos: &Position, input: String) -> Option<Move> {
+    pub fn parse_move(pos: &Position, input: String, envir: &mut SearchEnv) -> Option<Move> {
         let mut moves = MoveGenerator::initialize(pos, MoveTypes::All);
 
         loop {
-            let m = moves.get_next_move(false);
+            let m = moves.get_next_move(false, &envir);
             
             if m == NULL_MOVE {
                 break
@@ -86,13 +86,13 @@ impl <'a>MoveGenerator<'a> {
     }
 
     ///Gets next move, best first. Dynamically generates moves in phases lazily sorted. Returns NULL_MOVE, when empty
-    pub fn get_next_move(&mut self, sort: bool) -> Move {
+    pub fn get_next_move(&mut self, sort: bool, envir: &SearchEnv) -> Move {
         //We have run out
         if self.extract_index == self.insert_index {
             //Generate more moves
             match self.phase {
-                MoveTypes::Captures => {self.generate_captures(); return self.get_next_move(sort)},
-                MoveTypes::All => if self.move_types == MoveTypes::All {self.generate_non_captures(); return self.get_next_move(sort)} else { return NULL_MOVE },
+                MoveTypes::Captures => {self.generate_captures(); return self.get_next_move(sort, envir)},
+                MoveTypes::All => if self.move_types == MoveTypes::All {self.generate_non_captures(envir); return self.get_next_move(sort, envir)} else { return NULL_MOVE },
                 MoveTypes::Done => return NULL_MOVE
             }
         }
@@ -333,7 +333,7 @@ impl <'a>MoveGenerator<'a> {
     }
 
     ///Generate quiet moves and adds them to the list
-    fn generate_non_captures(&mut self) {
+    fn generate_non_captures(&mut self, envir: &SearchEnv) {
         let mut from_sq: u8;
         let mut to_sq:   u8;
 
@@ -379,20 +379,20 @@ impl <'a>MoveGenerator<'a> {
                     //to_sq is empty
                     if to_sq >= 8 {
                         //Quiet move
-                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::None as u8, false, false, false, false));
+                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::None as u8, false, false, false, false), envir);
 
                         //Double push
                         to_sq = (to_sq as i8 - 8) as u8;
                         if !self.pos.all_occupancies.get_bit(to_sq) && from_sq / 8 == 6 {
-                            self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::None as u8, false, true, false, false));
+                            self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::None as u8, false, true, false, false), envir);
                         }
                     }
                     //Promotions
                     else {
-                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::WhiteQueen as u8,  false, false, false, false));
-                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::WhiteKnight as u8, false, false, false, false));
-                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::WhiteRook as u8,   false, false, false, false));
-                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::WhiteBishop as u8, false, false, false, false))
+                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::WhiteQueen as u8,  false, false, false, false), envir);
+                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::WhiteKnight as u8, false, false, false, false), envir);
+                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::WhiteRook as u8,   false, false, false, false), envir);
+                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::WhiteBishop as u8, false, false, false, false), envir)
                     }
                 }
             }
@@ -403,7 +403,7 @@ impl <'a>MoveGenerator<'a> {
                 !self.pos.is_square_attacked(Square::e1 as u8, Color::Black) &&                         //e1 is notunder attack
                 !self.pos.is_square_attacked(Square::f1 as u8, Color::Black) {                          //f1 is not under attack
 
-                    self.score_and_add_quiet_move(Move::new(Square::e1 as u8, Square::g1 as u8, Piece::WhiteKing as u8, Piece::None as u8, false, false, false, true))
+                    self.score_and_add_quiet_move(Move::new(Square::e1 as u8, Square::g1 as u8, Piece::WhiteKing as u8, Piece::None as u8, false, false, false, true), envir)
             }
             //Castling queen
             if  self.pos.castling_ability & (CastlingAbility::WhiteQueenSide as u8) != 0 &&             //castling ability
@@ -411,7 +411,7 @@ impl <'a>MoveGenerator<'a> {
                 !self.pos.is_square_attacked(Square::e1 as u8, Color::Black) &&                         //e1 is notunder attack
                 !self.pos.is_square_attacked(Square::d1 as u8, Color::Black) {                          //d1 is not under attack
 
-                    self.score_and_add_quiet_move(Move::new(Square::e1 as u8, Square::c1 as u8, Piece::WhiteKing as u8, Piece::None as u8, false, false, false, true))
+                    self.score_and_add_quiet_move(Move::new(Square::e1 as u8, Square::c1 as u8, Piece::WhiteKing as u8, Piece::None as u8, false, false, false, true), envir)
             }
         }
         //BLACK
@@ -439,20 +439,20 @@ impl <'a>MoveGenerator<'a> {
                     //to_sq is empty
                     if to_sq <= 55 {
                         //Quiet move
-                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::None as u8, false, false, false, false));
+                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::None as u8, false, false, false, false), envir);
 
                         //Double push
                         to_sq = (to_sq as i8 + 8) as u8;
                         if !self.pos.all_occupancies.get_bit(to_sq) && from_sq / 8 == 1 {
-                            self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::None as u8, false, true, false, false));
+                            self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::None as u8, false, true, false, false), envir);
                         }
                     }
                     //Promotions
                     else {
-                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::BlackQueen as u8,  false, false, false, false));
-                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::BlackKnight as u8, false, false, false, false));
-                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::BlackRook as u8,   false, false, false, false));
-                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::BlackBishop as u8, false, false, false, false))
+                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::BlackQueen as u8,  false, false, false, false), envir);
+                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::BlackKnight as u8, false, false, false, false), envir);
+                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::BlackRook as u8,   false, false, false, false), envir);
+                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::BlackBishop as u8, false, false, false, false), envir)
                     }
                 }
             }
@@ -463,7 +463,7 @@ impl <'a>MoveGenerator<'a> {
                 !self.pos.is_square_attacked(Square::e8 as u8, Color::White) &&                         //e8 is notunder attack
                 !self.pos.is_square_attacked(Square::f8 as u8, Color::White) {                          //f8 is not under attack
 
-                    self.score_and_add_quiet_move(Move::new(Square::e8 as u8, Square::g8 as u8, Piece::BlackKing as u8, Piece::None as u8, false, false, false, true))
+                    self.score_and_add_quiet_move(Move::new(Square::e8 as u8, Square::g8 as u8, Piece::BlackKing as u8, Piece::None as u8, false, false, false, true), envir)
             }
             //Castling queen
             if  self.pos.castling_ability & (CastlingAbility::BlackQueenSide as u8) != 0 &&             //castling ability
@@ -471,7 +471,7 @@ impl <'a>MoveGenerator<'a> {
                 !self.pos.is_square_attacked(Square::e8 as u8, Color::White) &&                         //e8 is notunder attack
                 !self.pos.is_square_attacked(Square::d8 as u8, Color::White) {                          //d8 is not under attack
 
-                    self.score_and_add_quiet_move(Move::new(Square::e8 as u8, Square::c8 as u8, Piece::BlackKing as u8, Piece::None as u8, false, false, false, true))
+                    self.score_and_add_quiet_move(Move::new(Square::e8 as u8, Square::c8 as u8, Piece::BlackKing as u8, Piece::None as u8, false, false, false, true), envir)
             }
         }
 
@@ -486,7 +486,7 @@ impl <'a>MoveGenerator<'a> {
 
             while !quiet.is_empty() {
                 to_sq = quiet.extract_bit();
-                self.score_and_add_quiet_move(Move::new(from_sq, to_sq, knight, Piece::None as u8, false, false, false, false))
+                self.score_and_add_quiet_move(Move::new(from_sq, to_sq, knight, Piece::None as u8, false, false, false, false), envir)
             }
         }
 
@@ -499,7 +499,7 @@ impl <'a>MoveGenerator<'a> {
 
             while !quiet.is_empty() {
                 to_sq = quiet.extract_bit();
-                self.score_and_add_quiet_move(Move::new(from_sq, to_sq, bishop, Piece::None as u8, false, false, false, false))
+                self.score_and_add_quiet_move(Move::new(from_sq, to_sq, bishop, Piece::None as u8, false, false, false, false), envir)
             }
         }
 
@@ -512,7 +512,7 @@ impl <'a>MoveGenerator<'a> {
 
             while !quiet.is_empty() {
                 to_sq = quiet.extract_bit();
-                self.score_and_add_quiet_move(Move::new(from_sq, to_sq, rook, Piece::None as u8, false, false, false, false))
+                self.score_and_add_quiet_move(Move::new(from_sq, to_sq, rook, Piece::None as u8, false, false, false, false), envir)
             }
         }
 
@@ -525,7 +525,7 @@ impl <'a>MoveGenerator<'a> {
 
             while !quiet.is_empty() {
                 to_sq = quiet.extract_bit();
-                self.score_and_add_quiet_move(Move::new(from_sq, to_sq, queen, Piece::None as u8, false, false, false, false))
+                self.score_and_add_quiet_move(Move::new(from_sq, to_sq, queen, Piece::None as u8, false, false, false, false), envir)
             }
         }
 
@@ -538,7 +538,7 @@ impl <'a>MoveGenerator<'a> {
 
             while !quiet.is_empty() {
                 to_sq = quiet.extract_bit();
-                self.score_and_add_quiet_move(Move::new(from_sq, to_sq, king, Piece::None as u8, false, false, false, false))
+                self.score_and_add_quiet_move(Move::new(from_sq, to_sq, king, Piece::None as u8, false, false, false, false), envir)
             }
         }
 
@@ -579,7 +579,17 @@ impl <'a>MoveGenerator<'a> {
     }
 
     ///Scores a quiet move
-    fn score_and_add_quiet_move(&mut self, cmove: Move) {
+    fn score_and_add_quiet_move(&mut self, mut cmove: Move, envir: &SearchEnv) {
+        
+        /*if envir.killer_moves[0][envir.ply as usize] == cmove {
+            cmove.set_score(250)
+        } else if envir.killer_moves[1][envir.ply as usize] == cmove {
+            cmove.set_score(249)
+        }
+        else {
+            cmove.set_score(envir.history_moves[cmove.piece() as usize][cmove.to_square() as usize])
+        }*/
+
         self.add_move(cmove)
     }
 }

@@ -3,8 +3,8 @@ use super::*;
 pub struct SearchEnv<'a> {
     pub nodes: u64,
     pub ply: u8,
-    pub killer_moves: [[Option<Move>; MAX_PLY]; 2],
-    pub history_moves: [[i32; 64]; 12],
+    pub killer_moves: [[Move; MAX_PLY]; 2],
+    pub history_moves: [[u8; 64]; 12],
     pub stopping: bool,
     io_receiver: &'a IoWrapper,
     pub start_time: SystemTime,
@@ -18,8 +18,8 @@ impl <'a>SearchEnv<'a> {
         Self{
             nodes: 0,
             ply: 0,
-            killer_moves: [[None; MAX_PLY]; 2],
-            history_moves: [[0 as i32; 64]; 12],
+            killer_moves: [[NULL_MOVE; MAX_PLY]; 2],
+            history_moves: [[0; 64]; 12],
             stopping: false,
             io_receiver: io_receiver,
             start_time: SystemTime::now(),

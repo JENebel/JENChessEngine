@@ -1,12 +1,12 @@
 #[derive(Copy, Clone)]
 pub struct RepetitionTable {
-    pub table: [u64; 1000],
+    pub table: [u64; 512],
     pub index: usize
 }
 
 impl RepetitionTable {
     pub fn new() -> Self {
-        Self {table: [0; 1000], index: 0 }
+        Self {table: [0; 512], index: 0 }
     }
 
     pub fn insert(&mut self, hash: u64) {

@@ -13,8 +13,8 @@ const INFINITY: i32 = 50000;
 
 const INPUT_POLL_INTERVAL: u64 = 16383; //Node interval to check if search aborted
 
-pub fn find_random_move(pos: &mut Position) {
-    let moves = MoveGenerator::all_moves(pos);
+pub fn find_random_move(pos: &mut Position, envir: &mut SearchEnv) {
+    let moves = MoveGenerator::all_moves(pos, envir);
     let rand = rand::thread_rng().gen_range(0..moves.len());
     print!("bestmove {}\n", moves[rand].to_uci());
 }
@@ -181,7 +181,7 @@ fn negamax(pos: &mut Position, depth: u8, alpha: i32, beta: i32, tt: &mut Transp
     let mut moves_searched = 0;
 
     loop {
-        let m = moves.get_next_move(true);
+        let m = moves.get_next_move(true, envir);
         if m == NULL_MOVE { break }
         
         let mut copy = *pos;
@@ -199,6 +199,7 @@ fn negamax(pos: &mut Position, depth: u8, alpha: i32, beta: i32, tt: &mut Transp
         envir.repetition_table.move_back();
 
         if moves_searched == 0 {
+            best_move = m;
             //Full PV Search
             score = -negamax(&mut copy, n_depth - 1, -beta, -temp_alpha, tt, envir);
         } else {
@@ -243,7 +244,7 @@ fn negamax(pos: &mut Position, depth: u8, alpha: i32, beta: i32, tt: &mut Transp
                 //Update killer moves
                 if !m.is_capture() {
                     envir.killer_moves[1][envir.ply as usize] = envir.killer_moves[0][envir.ply as usize];
-                    envir.killer_moves[0][envir.ply as usize] = Some(m);
+                    envir.killer_moves[0][envir.ply as usize] = m;
                 }
     
                 //Record TT entry
@@ -257,7 +258,7 @@ fn negamax(pos: &mut Position, depth: u8, alpha: i32, beta: i32, tt: &mut Transp
 
             //Update history move
             if !m.is_capture() {
-                envir.history_moves[m.piece() as usize][m.to_square() as usize] += depth as i32
+                envir.history_moves[m.piece() as usize][m.to_square() as usize] += depth as u8
             }
 
             temp_alpha = score;
@@ -308,7 +309,7 @@ fn quiescence(pos: &mut Position, alpha: i32, beta: i32, envir: &mut SearchEnv) 
     let mut moves = MoveGenerator::initialize(&pos, MoveTypes::Captures);
 
     loop {
-        let m = moves.get_next_move(true);
+        let m = moves.get_next_move(true, envir);
         if m == NULL_MOVE { break }
 
         let mut copy = *pos;
