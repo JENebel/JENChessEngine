@@ -44,15 +44,23 @@ impl TranspositionTable {
     }
 
     pub fn record(&mut self, hash: u64, score: i32, depth: u8, flag: HashFlag, ply: u8, best_move: Move) {
-        //Adjust mating scores before insertion
-        let mut adjusted_score: i32 = score;
-        if score < -MATE_BOUND {
-            adjusted_score -= ply as i32;
-        } else if score > MATE_BOUND {
-            adjusted_score += ply as i32;
-        }
 
-        self.table[(hash % TT_SIZE as u64) as usize] = TranspositionTableEntry::new(hash, depth, flag, adjusted_score, best_move)
+        let index = (hash % TT_SIZE as u64) as usize;
+
+        let existing = self.table[index];
+
+        //Only replace if deeper AND existing is not exact
+        if existing.depth <= depth && existing.flag != HashFlag::Exact {
+            //Adjust mating scores before insertion
+            let mut adjusted_score: i32 = score;
+            if score < -MATE_BOUND {
+                adjusted_score -= ply as i32;
+            } else if score > MATE_BOUND {
+                adjusted_score += ply as i32;
+            }
+
+            self.table[index] = TranspositionTableEntry::new(hash, depth, flag, adjusted_score, best_move)
+        }
     }
 
     pub fn probe_score(&mut self, hash: u64, depth: u8, alpha: i32, beta: i32, ply: u8) -> i32 {
