@@ -1,3 +1,5 @@
+use std::fmt::{Display, self, write};
+
 use super::*;
 
 pub const NULL_MOVE: Move = Move { data: 0, score: 0 };
@@ -80,15 +82,6 @@ impl Move {
         (self.data & 0x800000) == 0x800000
     }
 
-    pub fn to_uci(&self) -> String {
-        let mut result = SQUARE_STRINGS[self.from_square() as usize].to_string();
-        result += SQUARE_STRINGS[self.to_square() as usize];
-        if self.promotion() != Piece::None as u8 {
-            result += PIECE_STRINGS[self.promotion() as usize].to_lowercase().as_str()
-        }
-        result
-    }
-
     #[cfg(test)]
     pub fn print(&self) {
         print!(" From: {}", SQUARE_STRINGS[self.from_square() as usize]);
@@ -110,5 +103,17 @@ impl Move {
             print!("    Double push")
         }
         println!()
+    }
+}
+
+impl Display for Move {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", SQUARE_STRINGS[self.from_square() as usize].to_string());
+        write!(f, "{}", SQUARE_STRINGS[self.to_square() as usize]);
+        if self.promotion() != Piece::None as u8 {
+            write!(f, "{}", PIECE_STRINGS[self.promotion() as usize].to_lowercase())
+        } else {
+            write!(f, "")
+        }
     }
 }

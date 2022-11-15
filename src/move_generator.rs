@@ -77,7 +77,7 @@ impl <'a>MoveGenerator<'a> {
             if m == NULL_MOVE {
                 break
             }
-            else if m.to_uci() == input {
+            else if format!("{}", m) == input {
                 return Some(m)
             }
         }

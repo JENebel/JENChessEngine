@@ -18,8 +18,6 @@ impl Bitboard {
         self.bits
     }
 
-    #[cfg(test)]
-    #[allow(dead_code)]
     pub fn print (&self) {
         println!();
         for rank in 0..8 {

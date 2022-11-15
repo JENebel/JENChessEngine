@@ -16,7 +16,7 @@ const INPUT_POLL_INTERVAL: u64 = 16383; //Node interval to check if search abort
 pub fn find_random_move(pos: &mut Position, envir: &mut SearchEnv) {
     let moves = MoveGenerator::all_moves(pos, envir);
     let rand = rand::thread_rng().gen_range(0..moves.len());
-    print!("bestmove {}\n", moves[rand].to_uci());
+    print!("bestmove {}\n", moves[rand]);
 }
 
 pub struct SearchResult {
@@ -80,7 +80,7 @@ pub fn search(pos: &mut Position, depth: i8, tt: &mut TranspositionTable, envir:
 
     let best_move = tt.probe_best_move(pos.zobrist_hash);
 
-    print!("bestmove {}\n", best_move.to_uci());
+    print!("bestmove {}\n", best_move);
 
     SearchResult::new(best_move, envir.nodes, score, current_depth - 1, !envir.stopping, envir.tt_hits)
 }
@@ -93,7 +93,7 @@ fn print_pv_line(tt: &TranspositionTable, mut pos: Position){
             break;
         }
 
-        print!(" {}", pv.to_uci());
+        print!(" {}", pv);
 
         pos.make_move(&pv, &mut rep_table);
     }
