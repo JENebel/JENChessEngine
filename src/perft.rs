@@ -2,7 +2,9 @@ use rayon::prelude::*;
 
 use super::*;
 
-pub fn perft(pos: &mut Position, depth: u8, print: bool, envir: &mut SearchEnv) -> u128 {
+pub fn perft(pos: &mut Position, depth: u8, print: bool) -> u128 {
+    todo!();
+/*
     let mut moves = MoveGenerator::initialize(pos, MoveTypes::All);
 
     if depth == 0 {
@@ -29,7 +31,7 @@ pub fn perft(pos: &mut Position, depth: u8, print: bool, envir: &mut SearchEnv) 
         }
     }
 
-    count
+    count*/
 
 
     //todo!()

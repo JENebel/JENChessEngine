@@ -98,8 +98,20 @@ impl TranspositionTable {
         return UNKNOWN_SCORE;
     }
 
+    ///Returns the best move stored for this position
     pub fn probe_best_move(&self, hash: u64) -> Move {
         self.table[(hash % TT_SIZE as u64) as usize].best_move
+    }
+
+    ///Returns the best move stored for this position only if it is a PV move/Exact score
+    pub fn probe_pv_move(&self, hash: u64) -> Option<Move> {
+        let entry = self.table[(hash % TT_SIZE as u64) as usize];
+        if entry.flag == HashFlag::Exact {
+            Some(entry.best_move)
+        }
+        else {
+            None
+        }
     }
 
     pub fn clear(&mut self) {

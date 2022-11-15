@@ -2,7 +2,7 @@ mod position;
 mod bitboard;
 mod attack_tables;
 mod cmove;
-mod search;
+mod searcher;
 mod move_generator;
 mod make_move;
 mod perft;
@@ -11,7 +11,6 @@ mod transposition_table;
 mod repetition_table;
 mod constant_generation;
 mod io;
-mod search_env;
 
 use core::panic;
 use std::{process, time::SystemTime};
@@ -20,7 +19,7 @@ use position::*;
 use cmove::*;
 use bitboard::*;
 use attack_tables::*;
-use search::*;
+use searcher::*;
 use move_generator::*;
 use make_move::*;
 use perft::*;
@@ -29,7 +28,7 @@ use transposition_table::*;
 use repetition_table::*;
 use constant_generation::*;
 use io::*;
-use search_env::*;
+use searcher::*;
 
 fn main() {
     let io_receiver = IoWrapper::init();
@@ -260,7 +259,7 @@ fn parse_go(args: String, pos: &mut Position, io_receiver: &IoWrapper, tt: &mut 
     let mut envir = SearchEnv::new(time, &io_receiver, rep_table);
 
     //Run search
-    search(pos, depth, tt, &mut envir);
+    searcher(pos, depth, tt, &mut envir);
 }
 
 pub fn sbench(io_receiver: &IoWrapper) {
@@ -281,7 +280,7 @@ pub fn sbench(io_receiver: &IoWrapper) {
     let mut nodes = 0;
     for mut pos in poss {
         //p.pretty_print();
-        let result = search(&mut pos, depth, &mut TranspositionTable::new(), &mut SearchEnv::new(-1, io_receiver, &mut RepetitionTable::new()));
+        let result = searcher(&mut pos, depth, &mut TranspositionTable::new(), &mut SearchEnv::new(-1, io_receiver, &mut RepetitionTable::new()));
         nodes += result.nodes_visited;
         tt_hits += result.tt_hits;
         if !result.reached_max_ply {

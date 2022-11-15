@@ -120,207 +120,208 @@ const BISHOP_MOB: i32 = 5;
 const ROOK_MOB: i32 = 3;
 const QUEEN_MOB: f32 = 1.5;*/
 
+impl Position {
+    pub fn evaluate(&self) -> i32 {
+        let mut score: i32 = 0;
 
-pub fn evaluate(game: &Position) -> i32 {
-    let mut score: i32 = 0;
+        let mut stacked_pawns;
 
-    let mut stacked_pawns;
+        for bb in 0..12 {
+            let mut board = self.bitboards[bb];
+            while !board.is_empty() {
+                let square = board.extract_bit();
+                score += MATERIAL_WEIGHTS[bb];
+                match bb {
+                    //White pawns
+                    0  => {
+                        score += PAWN_SCORES[square as usize];
 
-    for bb in 0..12 {
-        let mut board = game.bitboards[bb];
-        while !board.is_empty() {
-            let square = board.extract_bit();
-            score += MATERIAL_WEIGHTS[bb];
-            match bb {
-                //White pawns
-                0  => {
-                    score += PAWN_SCORES[square as usize];
+                        //Stacked pawn penalty
+                        stacked_pawns = self.get_piece_bitboard(Piece::WhitePawn)
+                                            .and(Bitboard::from_u64(FILE_MASKS[square as usize]))
+                                            .pop_count();
+                        if stacked_pawns > 1 {
+                            score += stacked_pawns as i32 * STACKED_PAWN_PENALTY;
+                        }
 
-                    //Stacked pawn penalty
-                    stacked_pawns = game.get_piece_bitboard(Piece::WhitePawn)
-                                        .and(Bitboard::from_u64(FILE_MASKS[square as usize]))
-                                        .pop_count();
-                    if stacked_pawns > 1 {
-                        score += stacked_pawns as i32 * STACKED_PAWN_PENALTY;
-                    }
+                        //Isolated pawn penalty
+                        if self.get_piece_bitboard(Piece::WhitePawn)
+                                .and(Bitboard::from_u64(ISOLATED_MASKS[square as usize]))
+                                .is_empty() {
+                            score += ISOLATED_PAWN_PENALTY;
+                        }
 
-                    //Isolated pawn penalty
-                    if game.get_piece_bitboard(Piece::WhitePawn)
+                        //Passed pawn penalty
+                        if self.get_piece_bitboard(Piece::BlackPawn)
+                            .and(Bitboard::from_u64(WHITE_PASSED_PAWN_MASKS[square as usize]))
+                            .is_empty() {
+                            score += PASSED_WHITE_PAWN_BONUS[LOOKUP_RANK[square as usize]];
+                        }
+                    },
+                    //White knight
+                    1  => {
+                        score += KNIGHT_SCORES[square as usize];
+
+                        //Mobility
+                        //score += (get_knight_attack_table(square).pop_count() - KNIGHT_UNIT) as i32 * KNIGHT_MOB;
+                        score += get_knight_attack_table(square).pop_count() as i32;
+                    },
+                    //White bishops
+                    2  => {
+                        score += BISHOP_SCORES[square as usize];
+
+                        //Mobility
+                        //score += (get_bishop_attack_table(square, self.all_occupancies).pop_count() - BISHOP_UNIT) as i32 * BISHOP_MOB;
+                        score += (get_bishop_attack_table(square, self.all_occupancies).pop_count()) as i32;
+
+                    },
+                    //White Rooks
+                    3  => {
+                        score += ROOK_SCORES[square as usize];
+
+                        //Semi open file bonus
+                        if self.get_piece_bitboard(Piece::WhitePawn)
+                            .and(Bitboard::from_u64(FILE_MASKS[square as usize]))
+                            .is_empty() {
+                            score += SEMI_OPEN_FILE_SCORE;
+                        }
+
+                        //Open file bonus
+                        if (self.get_piece_bitboard(Piece::WhitePawn)
+                                .or(self.get_piece_bitboard(Piece::BlackPawn)))
+                                    .and(Bitboard::from_u64(FILE_MASKS[square as usize])).is_empty() {
+                            score += OPEN_FILE_SCORE;
+                        }
+
+                        //Mobility
+                        //score += (get_rook_attack_table(square, self.all_occupancies).pop_count() - ROOK_UNIT) as i32 * ROOK_MOB;
+                        score += get_rook_attack_table(square, self.all_occupancies).pop_count() as i32;
+                    },
+                    //White queen
+                    4 => {
+                        //Mobility
+                        //score += ((get_queen_attack_table(square, self.all_occupancies).pop_count() - QUEEN_UNIT) as f32 * QUEEN_MOB) as i32;
+                        score += get_queen_attack_table(square, self.all_occupancies).pop_count() as i32;
+                    },
+                    //White king
+                    5  => {
+                        score += KING_SCORES[square as usize];
+
+                        //Semi open file penalty
+                        if self.get_piece_bitboard(Piece::WhitePawn)
+                            .and(Bitboard::from_u64(FILE_MASKS[square as usize]))
+                            .is_empty() {
+                            score -= SEMI_OPEN_FILE_SCORE;
+                        }
+
+                        //Open file penalty
+                        if (self.get_piece_bitboard(Piece::WhitePawn)
+                                .or(self.get_piece_bitboard(Piece::BlackPawn)))
+                                    .and(Bitboard::from_u64(FILE_MASKS[square as usize])).is_empty() {
+                            score -= OPEN_FILE_SCORE;
+                        }
+
+                        //King safety
+                        score += get_king_attack_table(square).and(self.white_occupancies).pop_count() as i32 * PROTECTED_KING_BONUS;
+                    },
+                    //Black pawns
+                    6  => {
+                        score -= PAWN_SCORES[MIRRORED[square as usize]];
+                        
+                        //Stacked pawn penalty
+                        stacked_pawns = self.get_piece_bitboard(Piece::BlackPawn)
+                                            .and(Bitboard::from_u64(FILE_MASKS[square as usize]))
+                                            .pop_count();
+                        if stacked_pawns > 1 {
+                            score -= stacked_pawns as i32 * STACKED_PAWN_PENALTY;
+                        }
+
+                        //Isolated pawn penalty
+                        if self.get_piece_bitboard(Piece::BlackPawn)
                             .and(Bitboard::from_u64(ISOLATED_MASKS[square as usize]))
                             .is_empty() {
-                        score += ISOLATED_PAWN_PENALTY;
+                            score -= ISOLATED_PAWN_PENALTY;
+                        }
+
+                        //Passed pawn penalty
+                        if self.get_piece_bitboard(Piece::WhitePawn)
+                            .and(Bitboard::from_u64(BLACK_PASSED_PAWN_MASKS[square as usize]))
+                            .is_empty() {
+                            score -= PASSED_BLACK_PAWN_BONUS[LOOKUP_RANK[square as usize]];
+                        }
+                    },
+                    //Black knight
+                    7  => {
+                        score -= KNIGHT_SCORES[MIRRORED[square as usize]];
+
+                        //Mobility
+                        //score -= (get_knight_attack_table(square).pop_count() - KNIGHT_UNIT) as i32 * KNIGHT_MOB;
+                        score -= get_knight_attack_table(square).pop_count() as i32;
+                    },
+                    //Black bishop
+                    8  => {
+                        score -= BISHOP_SCORES[MIRRORED[square as usize]];
+
+                        //Mobility
+                        //score -= (get_bishop_attack_table(square, self.all_occupancies).pop_count() - BISHOP_UNIT) as i32 * BISHOP_MOB;
+                        score -= get_bishop_attack_table(square, self.all_occupancies).pop_count() as i32;
+                    },
+                    //Black rooks
+                    9  => {
+                        score -= ROOK_SCORES[MIRRORED[square as usize]];
+
+                        //Semi open file bonus
+                        if self.get_piece_bitboard(Piece::BlackPawn)
+                            .and(Bitboard::from_u64(FILE_MASKS[square as usize]))
+                            .is_empty() {
+                            score -= SEMI_OPEN_FILE_SCORE;
+                        }
+
+                        //Open file bonus
+                        if (self.get_piece_bitboard(Piece::BlackPawn)
+                                .or(self.get_piece_bitboard(Piece::WhitePawn)))
+                                    .and(Bitboard::from_u64(FILE_MASKS[square as usize])).is_empty() {
+                            score -= OPEN_FILE_SCORE;
+                        }
+
+                        //Mobility
+                        //score -= (get_rook_attack_table(square, self.all_occupancies).pop_count() - ROOK_UNIT) as i32 * ROOK_MOB;
+                        score -= get_rook_attack_table(square, self.all_occupancies).pop_count() as i32;
+                    },
+                    //Black queen
+                    10 => {
+                        //Mobility
+                        //score -= ((get_queen_attack_table(square, self.all_occupancies).pop_count() - QUEEN_UNIT) as f32 * QUEEN_MOB) as i32;
+                        score -= get_queen_attack_table(square, self.all_occupancies).pop_count() as i32;
                     }
+                    //Black king
+                    11 => {
+                        score -= KING_SCORES[MIRRORED[square as usize]];
 
-                    //Passed pawn penalty
-                    if game.get_piece_bitboard(Piece::BlackPawn)
-                           .and(Bitboard::from_u64(WHITE_PASSED_PAWN_MASKS[square as usize]))
-                           .is_empty() {
-                        score += PASSED_WHITE_PAWN_BONUS[LOOKUP_RANK[square as usize]];
-                    }
-                },
-                //White knight
-                1  => {
-                    score += KNIGHT_SCORES[square as usize];
+                        //Semi open file penalty
+                        if self.get_piece_bitboard(Piece::BlackPawn)
+                            .and(Bitboard::from_u64(FILE_MASKS[square as usize]))
+                            .is_empty() {
+                            score += SEMI_OPEN_FILE_SCORE;
+                        }
 
-                    //Mobility
-                    //score += (get_knight_attack_table(square).pop_count() - KNIGHT_UNIT) as i32 * KNIGHT_MOB;
-                    score += get_knight_attack_table(square).pop_count() as i32;
-                },
-                //White bishops
-                2  => {
-                    score += BISHOP_SCORES[square as usize];
+                        //Open file penalty
+                        if (self.get_piece_bitboard(Piece::BlackPawn)
+                                .or(self.get_piece_bitboard(Piece::WhitePawn)))
+                                    .and(Bitboard::from_u64(FILE_MASKS[square as usize])).is_empty() {
+                            score += OPEN_FILE_SCORE;
+                        }
 
-                    //Mobility
-                    //score += (get_bishop_attack_table(square, game.all_occupancies).pop_count() - BISHOP_UNIT) as i32 * BISHOP_MOB;
-                    score += (get_bishop_attack_table(square, game.all_occupancies).pop_count()) as i32;
-
-                },
-                //White Rooks
-                3  => {
-                    score += ROOK_SCORES[square as usize];
-
-                    //Semi open file bonus
-                    if game.get_piece_bitboard(Piece::WhitePawn)
-                           .and(Bitboard::from_u64(FILE_MASKS[square as usize]))
-                           .is_empty() {
-                        score += SEMI_OPEN_FILE_SCORE;
-                    }
-
-                    //Open file bonus
-                    if (game.get_piece_bitboard(Piece::WhitePawn)
-                            .or(game.get_piece_bitboard(Piece::BlackPawn)))
-                                .and(Bitboard::from_u64(FILE_MASKS[square as usize])).is_empty() {
-                        score += OPEN_FILE_SCORE;
-                    }
-
-                    //Mobility
-                    //score += (get_rook_attack_table(square, game.all_occupancies).pop_count() - ROOK_UNIT) as i32 * ROOK_MOB;
-                    score += get_rook_attack_table(square, game.all_occupancies).pop_count() as i32;
-                },
-                //White queen
-                4 => {
-                    //Mobility
-                    //score += ((get_queen_attack_table(square, game.all_occupancies).pop_count() - QUEEN_UNIT) as f32 * QUEEN_MOB) as i32;
-                    score += get_queen_attack_table(square, game.all_occupancies).pop_count() as i32;
-                },
-                //White king
-                5  => {
-                    score += KING_SCORES[square as usize];
-
-                    //Semi open file penalty
-                    if game.get_piece_bitboard(Piece::WhitePawn)
-                           .and(Bitboard::from_u64(FILE_MASKS[square as usize]))
-                           .is_empty() {
-                        score -= SEMI_OPEN_FILE_SCORE;
-                    }
-
-                    //Open file penalty
-                    if (game.get_piece_bitboard(Piece::WhitePawn)
-                            .or(game.get_piece_bitboard(Piece::BlackPawn)))
-                                .and(Bitboard::from_u64(FILE_MASKS[square as usize])).is_empty() {
-                        score -= OPEN_FILE_SCORE;
-                    }
-
-                    //King safety
-                    score += get_king_attack_table(square).and(game.white_occupancies).pop_count() as i32 * PROTECTED_KING_BONUS;
-                },
-                //Black pawns
-                6  => {
-                    score -= PAWN_SCORES[MIRRORED[square as usize]];
-                    
-                    //Stacked pawn penalty
-                    stacked_pawns = game.get_piece_bitboard(Piece::BlackPawn)
-                                        .and(Bitboard::from_u64(FILE_MASKS[square as usize]))
-                                        .pop_count();
-                    if stacked_pawns > 1 {
-                        score -= stacked_pawns as i32 * STACKED_PAWN_PENALTY;
-                    }
-
-                    //Isolated pawn penalty
-                    if game.get_piece_bitboard(Piece::BlackPawn)
-                           .and(Bitboard::from_u64(ISOLATED_MASKS[square as usize]))
-                           .is_empty() {
-                        score -= ISOLATED_PAWN_PENALTY;
-                    }
-
-                    //Passed pawn penalty
-                    if game.get_piece_bitboard(Piece::WhitePawn)
-                           .and(Bitboard::from_u64(BLACK_PASSED_PAWN_MASKS[square as usize]))
-                           .is_empty() {
-                        score -= PASSED_BLACK_PAWN_BONUS[LOOKUP_RANK[square as usize]];
-                    }
-                },
-                //Black knight
-                7  => {
-                    score -= KNIGHT_SCORES[MIRRORED[square as usize]];
-
-                    //Mobility
-                    //score -= (get_knight_attack_table(square).pop_count() - KNIGHT_UNIT) as i32 * KNIGHT_MOB;
-                    score -= get_knight_attack_table(square).pop_count() as i32;
-                },
-                //Black bishop
-                8  => {
-                    score -= BISHOP_SCORES[MIRRORED[square as usize]];
-
-                    //Mobility
-                    //score -= (get_bishop_attack_table(square, game.all_occupancies).pop_count() - BISHOP_UNIT) as i32 * BISHOP_MOB;
-                    score -= get_bishop_attack_table(square, game.all_occupancies).pop_count() as i32;
-                },
-                //Black rooks
-                9  => {
-                    score -= ROOK_SCORES[MIRRORED[square as usize]];
-
-                    //Semi open file bonus
-                    if game.get_piece_bitboard(Piece::BlackPawn)
-                           .and(Bitboard::from_u64(FILE_MASKS[square as usize]))
-                           .is_empty() {
-                        score -= SEMI_OPEN_FILE_SCORE;
-                    }
-
-                    //Open file bonus
-                    if (game.get_piece_bitboard(Piece::BlackPawn)
-                            .or(game.get_piece_bitboard(Piece::WhitePawn)))
-                                .and(Bitboard::from_u64(FILE_MASKS[square as usize])).is_empty() {
-                        score -= OPEN_FILE_SCORE;
-                    }
-
-                    //Mobility
-                    //score -= (get_rook_attack_table(square, game.all_occupancies).pop_count() - ROOK_UNIT) as i32 * ROOK_MOB;
-                    score -= get_rook_attack_table(square, game.all_occupancies).pop_count() as i32;
-                },
-                //Black queen
-                10 => {
-                    //Mobility
-                    //score -= ((get_queen_attack_table(square, game.all_occupancies).pop_count() - QUEEN_UNIT) as f32 * QUEEN_MOB) as i32;
-                    score -= get_queen_attack_table(square, game.all_occupancies).pop_count() as i32;
-                }
-                //Black king
-                11 => {
-                    score -= KING_SCORES[MIRRORED[square as usize]];
-
-                    //Semi open file penalty
-                    if game.get_piece_bitboard(Piece::BlackPawn)
-                           .and(Bitboard::from_u64(FILE_MASKS[square as usize]))
-                           .is_empty() {
-                        score += SEMI_OPEN_FILE_SCORE;
-                    }
-
-                    //Open file penalty
-                    if (game.get_piece_bitboard(Piece::BlackPawn)
-                            .or(game.get_piece_bitboard(Piece::WhitePawn)))
-                                .and(Bitboard::from_u64(FILE_MASKS[square as usize])).is_empty() {
-                        score += OPEN_FILE_SCORE;
-                    }
-
-                    //King safety
-                    score -= get_king_attack_table(square).and(game.black_occupancies).pop_count() as i32 * PROTECTED_KING_BONUS;
-                },
-                _ => unreachable!()
-            };
+                        //King safety
+                        score -= get_king_attack_table(square).and(self.black_occupancies).pop_count() as i32 * PROTECTED_KING_BONUS;
+                    },
+                    _ => unreachable!()
+                };
+            }
         }
-    }
 
-    if game.active_player == Color::White { score } else { -score }
+        if self.active_player == Color::White { score } else { -score }
+    }
 }
 
 const fn generate_file_masks() -> [u64; 64] {
@@ -474,6 +475,6 @@ mod eval_tests {
     pub fn eval () {
         let game = Position::new_from_fen("6k1/ppppprbp/8/8/8/8/PPPPPRBP/6K1 w - - 0 1 ").unwrap();
         game.pretty_print();
-        println!("{}", evaluate(&game));
+        println!("{}", game.evaluate());
     }
 }

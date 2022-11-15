@@ -23,106 +23,112 @@ pub const MVV_LVA: [[u8; 12]; 12] = [
 #[derive(PartialEq)]
 pub enum MoveTypes {
     All,
-    Captures,
-    Done
+    Captures
+}
+
+#[derive(PartialEq)]
+enum GenPhase {
+    NotStarted,
+    DoneCaptures,
+    DoneAll
+}
+
+pub trait MoveScorer {
+    fn score_capture(&self, cmove: &mut Move);
+    fn score_non_capture(&self, cmove: &mut Move);
+}
+
+pub struct NonScorer { }
+impl MoveScorer for NonScorer {
+    fn score_capture(&self, cmove: &mut Move) {}
+    fn score_non_capture(&self, cmove: &mut Move) {}
+}
+
+impl MoveScorer for Searcher {
+    ///Initializes the generator to a position
+    fn score_capture(&self, cmove: &mut Move) {
+        let start;
+            let end;
+            let mut taken = 0;
+            if self.pos.active_player == Color::White {
+                start = Piece::BlackPawn as usize;
+                end = Piece::BlackKing as usize;
+            }
+            else {
+                start = Piece::WhitePawn as usize;
+                end = Piece::WhiteKing as usize;
+            }
+
+            for bb in start..end {
+                if self.pos.bitboards[bb].get_bit(cmove.to_square()) {
+                    taken = bb;
+                    break;
+                }
+            }
+
+            cmove.set_score(MVV_LVA[cmove.piece() as usize][taken as usize]);
+    }
+
+    fn score_non_capture(&self, cmove: &mut Move) {
+        if &mut self.killer_moves[0][self.ply as usize] == cmove {
+            cmove.set_score(250)
+        } else if &mut self.killer_moves[1][self.ply as usize] == cmove {
+            cmove.set_score(249)
+        }
+        else {
+            cmove.set_score(self.history_moves[cmove.piece() as usize][cmove.to_square() as usize])
+        }
+    }
 }
 
 pub struct MoveGenerator<'a> {
     pos: &'a Position,
+    scorer: & 'a dyn MoveScorer,
     moves: [Move; MOVE_LIST_SIZE],
     insert_index: usize,
     extract_index: usize,
     move_types: MoveTypes,
-    phase: MoveTypes
-    //The current phase of generation
+    phase: GenPhase,
+    sort: bool
 }
 
 impl <'a>MoveGenerator<'a> {
-    ///Initializes the generator to a position
-    pub fn initialize(pos: &'a Position, move_types: MoveTypes) -> Self {
+    ///Initializes the generator to a position with a searcher reference for sorting purposes
+    pub fn new_sorted(pos: &'a Position, move_types: MoveTypes, scorer: &dyn MoveScorer) -> Self {
         Self {
             pos,
+            scorer,
             moves: [NULL_MOVE; MOVE_LIST_SIZE],
             insert_index: 0,
             extract_index: 0,
             move_types,
-            phase: MoveTypes::Captures
+            phase: GenPhase::NotStarted,
+            sort: true
         }
     }
 
-    ///Generates all moves instantly, and returns them
-    pub fn all_moves(pos: &Position, envir: &mut SearchEnv) -> Vec<Move>{
-        let mut moves = MoveGenerator::initialize(pos, MoveTypes::All);
-
-        let mut result = Vec::new();
-
-        loop {
-            let m = moves.get_next_move(false, &envir);
-
-            if m == NULL_MOVE {
-                return result
-            }
-
-            result.push(m)
+    ///Initializes the generator to a position without sorting moves
+    pub fn new_unsorted(pos: &'a Position, move_types: MoveTypes) -> Self {
+        Self {
+            pos,
+            scorer: &NonScorer{},
+            moves: [NULL_MOVE; MOVE_LIST_SIZE],
+            insert_index: 0,
+            extract_index: 0,
+            move_types,
+            phase: GenPhase::NotStarted,
+            sort: false
         }
+    }
+
+    ///Generates all moves unsorted instantly, and returns them
+    pub fn all_moves(pos: &Position) -> Vec<Move>{
+        MoveGenerator::new_unsorted(pos, MoveTypes::All).collect()
     }
 
     ///Finds the associated with a uci string representation. eg. B2B1q
-    pub fn parse_move(pos: &Position, input: String, envir: &mut SearchEnv) -> Option<Move> {
-        let mut moves = MoveGenerator::initialize(pos, MoveTypes::All);
-
-        loop {
-            let m = moves.get_next_move(false, &envir);
-            
-            if m == NULL_MOVE {
-                break
-            }
-            else if format!("{}", m) == input {
-                return Some(m)
-            }
-        }
-
-        None
-    }
-
-    ///Gets next move, best first. Dynamically generates moves in phases lazily sorted. Returns NULL_MOVE, when empty
-    pub fn get_next_move(&mut self, sort: bool, envir: &SearchEnv) -> Move {
-        //We have run out
-        if self.extract_index == self.insert_index {
-            //Generate more moves
-            match self.phase {
-                MoveTypes::Captures => {self.generate_captures(); return self.get_next_move(sort, envir)},
-                MoveTypes::All => if self.move_types == MoveTypes::All {self.generate_non_captures(envir); return self.get_next_move(sort, envir)} else { return NULL_MOVE },
-                MoveTypes::Done => return NULL_MOVE
-            }
-        }
-
-        let best;
-
-        //Sort if wanted
-        if sort {
-            //Find move
-            let mut best_index = self.extract_index;
-            let mut best_score = self.moves[best_index].score;
-            
-            for i in (self.extract_index + 1)..self.insert_index {
-                if self.moves[i].score > best_score {
-                    best_score = self.moves[i].score;
-                    best_index = i;
-                }
-            }
-
-            //Swap
-            best = self.moves[best_index];
-            self.moves[self.extract_index] = self.moves[best_index];
-        }
-        else {
-            best = self.moves[self.extract_index]
-        }
-        
-        self.extract_index += 1;
-
-        best
+    pub fn parse_move(pos: &Position, input: String) -> Option<Move> {
+        MoveGenerator::new_unsorted(pos, MoveTypes::All).find(|m| format!("{}", m) == input)
     }
 
     ///Adds the pv move to the move list if one exists
@@ -329,11 +335,11 @@ impl <'a>MoveGenerator<'a> {
             }
         }
 
-        self.phase = MoveTypes::All;
+        self.phase = GenPhase::DoneCaptures;
     }
 
     ///Generate quiet moves and adds them to the list
-    fn generate_non_captures(&mut self, envir: &SearchEnv) {
+    fn generate_non_captures(&mut self) {
         let mut from_sq: u8;
         let mut to_sq:   u8;
 
@@ -379,20 +385,20 @@ impl <'a>MoveGenerator<'a> {
                     //to_sq is empty
                     if to_sq >= 8 {
                         //Quiet move
-                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::None as u8, false, false, false, false), envir);
+                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::None as u8, false, false, false, false));
 
                         //Double push
                         to_sq = (to_sq as i8 - 8) as u8;
                         if !self.pos.all_occupancies.get_bit(to_sq) && from_sq / 8 == 6 {
-                            self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::None as u8, false, true, false, false), envir);
+                            self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::None as u8, false, true, false, false));
                         }
                     }
                     //Promotions
                     else {
-                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::WhiteQueen as u8,  false, false, false, false), envir);
-                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::WhiteKnight as u8, false, false, false, false), envir);
-                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::WhiteRook as u8,   false, false, false, false), envir);
-                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::WhiteBishop as u8, false, false, false, false), envir)
+                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::WhiteQueen as u8,  false, false, false, false));
+                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::WhiteKnight as u8, false, false, false, false));
+                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::WhiteRook as u8,   false, false, false, false));
+                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::WhiteBishop as u8, false, false, false, false))
                     }
                 }
             }
@@ -403,7 +409,7 @@ impl <'a>MoveGenerator<'a> {
                 !self.pos.is_square_attacked(Square::e1 as u8, Color::Black) &&                         //e1 is notunder attack
                 !self.pos.is_square_attacked(Square::f1 as u8, Color::Black) {                          //f1 is not under attack
 
-                    self.score_and_add_quiet_move(Move::new(Square::e1 as u8, Square::g1 as u8, Piece::WhiteKing as u8, Piece::None as u8, false, false, false, true), envir)
+                    self.score_and_add_quiet_move(Move::new(Square::e1 as u8, Square::g1 as u8, Piece::WhiteKing as u8, Piece::None as u8, false, false, false, true))
             }
             //Castling queen
             if  self.pos.castling_ability & (CastlingAbility::WhiteQueenSide as u8) != 0 &&             //castling ability
@@ -411,7 +417,7 @@ impl <'a>MoveGenerator<'a> {
                 !self.pos.is_square_attacked(Square::e1 as u8, Color::Black) &&                         //e1 is notunder attack
                 !self.pos.is_square_attacked(Square::d1 as u8, Color::Black) {                          //d1 is not under attack
 
-                    self.score_and_add_quiet_move(Move::new(Square::e1 as u8, Square::c1 as u8, Piece::WhiteKing as u8, Piece::None as u8, false, false, false, true), envir)
+                    self.score_and_add_quiet_move(Move::new(Square::e1 as u8, Square::c1 as u8, Piece::WhiteKing as u8, Piece::None as u8, false, false, false, true))
             }
         }
         //BLACK
@@ -439,20 +445,20 @@ impl <'a>MoveGenerator<'a> {
                     //to_sq is empty
                     if to_sq <= 55 {
                         //Quiet move
-                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::None as u8, false, false, false, false), envir);
+                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::None as u8, false, false, false, false));
 
                         //Double push
                         to_sq = (to_sq as i8 + 8) as u8;
                         if !self.pos.all_occupancies.get_bit(to_sq) && from_sq / 8 == 1 {
-                            self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::None as u8, false, true, false, false), envir);
+                            self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::None as u8, false, true, false, false));
                         }
                     }
                     //Promotions
                     else {
-                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::BlackQueen as u8,  false, false, false, false), envir);
-                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::BlackKnight as u8, false, false, false, false), envir);
-                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::BlackRook as u8,   false, false, false, false), envir);
-                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::BlackBishop as u8, false, false, false, false), envir)
+                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::BlackQueen as u8,  false, false, false, false));
+                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::BlackKnight as u8, false, false, false, false));
+                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::BlackRook as u8,   false, false, false, false));
+                        self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::BlackBishop as u8, false, false, false, false))
                     }
                 }
             }
@@ -463,7 +469,7 @@ impl <'a>MoveGenerator<'a> {
                 !self.pos.is_square_attacked(Square::e8 as u8, Color::White) &&                         //e8 is notunder attack
                 !self.pos.is_square_attacked(Square::f8 as u8, Color::White) {                          //f8 is not under attack
 
-                    self.score_and_add_quiet_move(Move::new(Square::e8 as u8, Square::g8 as u8, Piece::BlackKing as u8, Piece::None as u8, false, false, false, true), envir)
+                    self.score_and_add_quiet_move(Move::new(Square::e8 as u8, Square::g8 as u8, Piece::BlackKing as u8, Piece::None as u8, false, false, false, true))
             }
             //Castling queen
             if  self.pos.castling_ability & (CastlingAbility::BlackQueenSide as u8) != 0 &&             //castling ability
@@ -471,7 +477,7 @@ impl <'a>MoveGenerator<'a> {
                 !self.pos.is_square_attacked(Square::e8 as u8, Color::White) &&                         //e8 is notunder attack
                 !self.pos.is_square_attacked(Square::d8 as u8, Color::White) {                          //d8 is not under attack
 
-                    self.score_and_add_quiet_move(Move::new(Square::e8 as u8, Square::c8 as u8, Piece::BlackKing as u8, Piece::None as u8, false, false, false, true), envir)
+                    self.score_and_add_quiet_move(Move::new(Square::e8 as u8, Square::c8 as u8, Piece::BlackKing as u8, Piece::None as u8, false, false, false, true))
             }
         }
 
@@ -486,7 +492,7 @@ impl <'a>MoveGenerator<'a> {
 
             while !quiet.is_empty() {
                 to_sq = quiet.extract_bit();
-                self.score_and_add_quiet_move(Move::new(from_sq, to_sq, knight, Piece::None as u8, false, false, false, false), envir)
+                self.score_and_add_quiet_move(Move::new(from_sq, to_sq, knight, Piece::None as u8, false, false, false, false))
             }
         }
 
@@ -499,7 +505,7 @@ impl <'a>MoveGenerator<'a> {
 
             while !quiet.is_empty() {
                 to_sq = quiet.extract_bit();
-                self.score_and_add_quiet_move(Move::new(from_sq, to_sq, bishop, Piece::None as u8, false, false, false, false), envir)
+                self.score_and_add_quiet_move(Move::new(from_sq, to_sq, bishop, Piece::None as u8, false, false, false, false))
             }
         }
 
@@ -512,7 +518,7 @@ impl <'a>MoveGenerator<'a> {
 
             while !quiet.is_empty() {
                 to_sq = quiet.extract_bit();
-                self.score_and_add_quiet_move(Move::new(from_sq, to_sq, rook, Piece::None as u8, false, false, false, false), envir)
+                self.score_and_add_quiet_move(Move::new(from_sq, to_sq, rook, Piece::None as u8, false, false, false, false))
             }
         }
 
@@ -525,7 +531,7 @@ impl <'a>MoveGenerator<'a> {
 
             while !quiet.is_empty() {
                 to_sq = quiet.extract_bit();
-                self.score_and_add_quiet_move(Move::new(from_sq, to_sq, queen, Piece::None as u8, false, false, false, false), envir)
+                self.score_and_add_quiet_move(Move::new(from_sq, to_sq, queen, Piece::None as u8, false, false, false, false))
             }
         }
 
@@ -538,11 +544,11 @@ impl <'a>MoveGenerator<'a> {
 
             while !quiet.is_empty() {
                 to_sq = quiet.extract_bit();
-                self.score_and_add_quiet_move(Move::new(from_sq, to_sq, king, Piece::None as u8, false, false, false, false), envir)
+                self.score_and_add_quiet_move(Move::new(from_sq, to_sq, king, Piece::None as u8, false, false, false, false))
             }
         }
 
-        self.phase = MoveTypes::Done;
+        self.phase = GenPhase::DoneAll;
     }
 
     #[inline(always)]
@@ -554,43 +560,57 @@ impl <'a>MoveGenerator<'a> {
 
     ///Scores a capturing move
     fn score_and_add_capture_move(&mut self, mut cmove: Move) {
-        let start;
-        let end;
-        let mut taken = 0;
-        if self.pos.active_player == Color::White {
-            start = Piece::BlackPawn as usize;
-            end = Piece::BlackKing as usize;
-        }
-        else {
-            start = Piece::WhitePawn as usize;
-            end = Piece::WhiteKing as usize;
-        }
-
-        for bb in start..end {
-            if self.pos.bitboards[bb].get_bit(cmove.to_square()) {
-                taken = bb;
-                break;
-            }
-        }
-
-        cmove.set_score(MVV_LVA[cmove.piece() as usize][taken as usize]);
-
+        self.scorer.score_capture(&mut cmove);
         self.add_move(cmove)
     }
 
     ///Scores a quiet move
-    fn score_and_add_quiet_move(&mut self, mut cmove: Move, envir: &SearchEnv) {
-        
-        /*if envir.killer_moves[0][envir.ply as usize] == cmove {
-            cmove.set_score(250)
-        } else if envir.killer_moves[1][envir.ply as usize] == cmove {
-            cmove.set_score(249)
+    fn score_and_add_quiet_move(&mut self, mut cmove: Move) {
+        self.scorer.score_non_capture(&mut cmove);
+        self.add_move(cmove)
+    }
+}
+
+impl Iterator for MoveGenerator<'_> {
+    type Item = Move;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        //We have run out
+        if self.extract_index == self.insert_index {
+            //Generate more moves
+            match self.phase {
+                GenPhase::NotStarted => { self.generate_captures() },
+                GenPhase::DoneCaptures => if self.move_types == MoveTypes::All { self.generate_non_captures() },
+                GenPhase::DoneAll => return None
+            }
+        }
+
+        let best;
+
+        //Sort if wanted
+        if self.sort {
+            //Find move
+            let mut best_index = self.extract_index;
+            let mut best_score = self.moves[best_index].score;
+            
+            for i in (self.extract_index + 1)..self.insert_index {
+                if self.moves[i].score > best_score {
+                    best_score = self.moves[i].score;
+                    best_index = i;
+                }
+            }
+
+            //Swap
+            best = self.moves[best_index];
+            self.moves[self.extract_index] = self.moves[best_index];
         }
         else {
-            cmove.set_score(envir.history_moves[cmove.piece() as usize][cmove.to_square() as usize])
-        }*/
+            best = self.moves[self.extract_index]
+        }
+        
+        self.extract_index += 1;
 
-        self.add_move(cmove)
+        Some(best)
     }
 }
 
