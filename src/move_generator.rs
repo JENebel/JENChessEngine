@@ -1,3 +1,7 @@
+use std::rc::Rc;
+
+use rand::Rng;
+
 use super::*;
 
 ///The maximum length of the moveList. Array is initialized to this
@@ -20,13 +24,15 @@ pub const MVV_LVA: [[u8; 12]; 12] = [
     [10, 20, 30, 40, 50, 60,  10, 20, 30, 40, 50, 60],
 ];
 
+const NON_SCORER: NonScorer = NonScorer;
+
 #[derive(PartialEq)]
 pub enum MoveTypes {
     All,
     Captures
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug, Copy, Clone)]
 enum GenPhase {
     NotStarted,
     DoneCaptures,
@@ -38,13 +44,20 @@ pub trait MoveScorer {
     fn score_non_capture(&self, cmove: &mut Move);
 }
 
-pub struct NonScorer { }
+pub struct NonScorer;
 impl MoveScorer for NonScorer {
-    fn score_capture(&self, cmove: &mut Move) {}
-    fn score_non_capture(&self, cmove: &mut Move) {}
+    fn score_capture(&self, _cmove: &mut Move) { }
+    fn score_non_capture(&self, _cmove: &mut Move) { }
 }
 
-impl MoveScorer for Searcher {
+///Returns a random legal move
+pub fn find_random_move(pos: &mut Position) {
+    let moves = MoveGenerator::all_moves(pos);
+    let rand = rand::thread_rng().gen_range(0..moves.len());
+    print!("bestmove {}\n", moves[rand]);
+}
+
+impl MoveScorer for Searcher<'_> {
     ///Initializes the generator to a position
     fn score_capture(&self, cmove: &mut Move) {
         let start;
@@ -70,9 +83,9 @@ impl MoveScorer for Searcher {
     }
 
     fn score_non_capture(&self, cmove: &mut Move) {
-        if &mut self.killer_moves[0][self.ply as usize] == cmove {
+        if self.killer_moves[0][self.ply as usize] == *cmove {
             cmove.set_score(250)
-        } else if &mut self.killer_moves[1][self.ply as usize] == cmove {
+        } else if self.killer_moves[1][self.ply as usize] == *cmove {
             cmove.set_score(249)
         }
         else {
@@ -81,9 +94,9 @@ impl MoveScorer for Searcher {
     }
 }
 
-pub struct MoveGenerator<'a> {
-    pos: &'a Position,
-    scorer: & 'a dyn MoveScorer,
+pub struct MoveGenerator<M: MoveScorer> {
+    pos: *const Position,
+    scorer: *const M,
     moves: [Move; MOVE_LIST_SIZE],
     insert_index: usize,
     extract_index: usize,
@@ -92,26 +105,12 @@ pub struct MoveGenerator<'a> {
     sort: bool
 }
 
-impl <'a>MoveGenerator<'a> {
-    ///Initializes the generator to a position with a searcher reference for sorting purposes
-    pub fn new_sorted(pos: &'a Position, move_types: MoveTypes, scorer: &dyn MoveScorer) -> Self {
-        Self {
-            pos,
-            scorer,
-            moves: [NULL_MOVE; MOVE_LIST_SIZE],
-            insert_index: 0,
-            extract_index: 0,
-            move_types,
-            phase: GenPhase::NotStarted,
-            sort: true
-        }
-    }
-
+impl MoveGenerator<NonScorer> {
     ///Initializes the generator to a position without sorting moves
-    pub fn new_unsorted(pos: &'a Position, move_types: MoveTypes) -> Self {
+    pub fn new_unsorted(pos: &Position, move_types: MoveTypes) -> Self {
         Self {
-            pos,
-            scorer: &NonScorer{},
+            pos: pos,
+            scorer: &NON_SCORER,
             moves: [NULL_MOVE; MOVE_LIST_SIZE],
             insert_index: 0,
             extract_index: 0,
@@ -127,16 +126,36 @@ impl <'a>MoveGenerator<'a> {
     }
 
     ///Finds the associated with a uci string representation. eg. B2B1q
-    pub fn parse_move(pos: &Position, input: String) -> Option<Move> {
-        MoveGenerator::new_unsorted(pos, MoveTypes::All).find(|m| format!("{}", m) == input)
+    pub fn parse_move(&mut self, input: String) -> Option<Move> {
+        self.find(|m| format!("{}", m) == input)
     }
 
     ///Adds the pv move to the move list if one exists
     pub fn add_pv_move(&mut self, tt: &TranspositionTable) {
-        let best = tt.probe_best_move(self.pos.zobrist_hash);
+        let best = tt.probe_best_move(self.deref_pos().zobrist_hash);
         if best != NULL_MOVE {
             self.add_move(best)
         }
+    }
+}
+
+impl<M: MoveScorer> MoveGenerator<M> {
+    ///Initializes the generator to a position with a searcher reference for sorting purposes
+    pub fn new_sorted(pos: &Position, move_types: MoveTypes, scorer: &M) -> Self {
+        Self {
+            pos: pos,
+            scorer,
+            moves: [NULL_MOVE; MOVE_LIST_SIZE],
+            insert_index: 0,
+            extract_index: 0,
+            move_types,
+            phase: GenPhase::NotStarted,
+            sort: true
+        }
+    }
+
+    fn deref_pos(&self) -> &Position {
+        unsafe { &*self.pos }
     }
 
     ///Generates capturing moves and adds them to the list
@@ -164,14 +183,14 @@ impl <'a>MoveGenerator<'a> {
 
         //Color specific
         //WHITE
-        if self.pos.active_player == Color::White {
-            opponent_occupancies = self.pos.black_occupancies;
-            pawn_bitboard =     self.pos.get_piece_bitboard(Piece::WhitePawn);
-            rook_bitboard =     self.pos.get_piece_bitboard(Piece::WhiteRook);
-            knight_bitboard =   self.pos.get_piece_bitboard(Piece::WhiteKnight);
-            bishop_bitboard =   self.pos.get_piece_bitboard(Piece::WhiteBishop);
-            queen_bitboard =    self.pos.get_piece_bitboard(Piece::WhiteQueen);
-            king_bitboard =     self.pos.get_piece_bitboard(Piece::WhiteKing);
+        if self.deref_pos().active_player == Color::White {
+            opponent_occupancies = self.deref_pos().black_occupancies;
+            pawn_bitboard =     self.deref_pos().get_piece_bitboard(Piece::WhitePawn);
+            rook_bitboard =     self.deref_pos().get_piece_bitboard(Piece::WhiteRook);
+            knight_bitboard =   self.deref_pos().get_piece_bitboard(Piece::WhiteKnight);
+            bishop_bitboard =   self.deref_pos().get_piece_bitboard(Piece::WhiteBishop);
+            queen_bitboard =    self.deref_pos().get_piece_bitboard(Piece::WhiteQueen);
+            king_bitboard =     self.deref_pos().get_piece_bitboard(Piece::WhiteKing);
 
             pawn =   Piece::WhitePawn as u8;
             rook =   Piece::WhiteRook as u8;
@@ -188,8 +207,8 @@ impl <'a>MoveGenerator<'a> {
                 attacks = get_pawn_attack_table(from_sq, Color::White);
 
                 //Enpassant
-                if self.pos.enpassant_square != Square::None && !attacks.and(Bitboard::from_u64(1 << self.pos.enpassant_square as u8)).is_empty(){
-                    self.score_and_add_capture_move(Move::new(from_sq, self.pos.enpassant_square as u8, pawn as u8, Piece::None as u8, true, false, true, false));
+                if self.deref_pos().enpassant_square != Square::None && !attacks.and(Bitboard::from_u64(1 << self.deref_pos().enpassant_square as u8)).is_empty(){
+                    self.score_and_add_capture_move(Move::new(from_sq, self.deref_pos().enpassant_square as u8, pawn as u8, Piece::None as u8, true, false, true, false));
                 }
 
                 //Overlap with opponent occupancies
@@ -213,13 +232,13 @@ impl <'a>MoveGenerator<'a> {
         }
         //BLACK
         else {
-            opponent_occupancies = self.pos.white_occupancies;
-            pawn_bitboard = self.pos.get_piece_bitboard(Piece::BlackPawn);
-            rook_bitboard = self.pos.get_piece_bitboard(Piece::BlackRook);
-            knight_bitboard = self.pos.get_piece_bitboard(Piece::BlackKnight);
-            bishop_bitboard = self.pos.get_piece_bitboard(Piece::BlackBishop);
-            queen_bitboard = self.pos.get_piece_bitboard(Piece::BlackQueen);
-            king_bitboard = self.pos.get_piece_bitboard(Piece::BlackKing);
+            opponent_occupancies = self.deref_pos().white_occupancies;
+            pawn_bitboard = self.deref_pos().get_piece_bitboard(Piece::BlackPawn);
+            rook_bitboard = self.deref_pos().get_piece_bitboard(Piece::BlackRook);
+            knight_bitboard = self.deref_pos().get_piece_bitboard(Piece::BlackKnight);
+            bishop_bitboard = self.deref_pos().get_piece_bitboard(Piece::BlackBishop);
+            queen_bitboard = self.deref_pos().get_piece_bitboard(Piece::BlackQueen);
+            king_bitboard = self.deref_pos().get_piece_bitboard(Piece::BlackKing);
 
             pawn =   Piece::BlackPawn as u8;
             rook =   Piece::BlackRook as u8;
@@ -236,8 +255,8 @@ impl <'a>MoveGenerator<'a> {
                 attacks = get_pawn_attack_table(from_sq, Color::Black);
 
                 //Enpassant
-                if self.pos.enpassant_square != Square::None && !attacks.and(Bitboard::from_u64(1 << self.pos.enpassant_square as u8)).is_empty(){
-                    self.score_and_add_capture_move(Move::new(from_sq, self.pos.enpassant_square as u8, pawn, Piece::None as u8, true, false, true, false));
+                if self.deref_pos().enpassant_square != Square::None && !attacks.and(Bitboard::from_u64(1 << self.deref_pos().enpassant_square as u8)).is_empty(){
+                    self.score_and_add_capture_move(Move::new(from_sq, self.deref_pos().enpassant_square as u8, pawn, Piece::None as u8, true, false, true, false));
                 }
 
                 //Overlap with opponent occupancies
@@ -280,7 +299,7 @@ impl <'a>MoveGenerator<'a> {
             from_sq = bishop_bitboard.extract_bit();
 
             //Raw attack table
-            attacks = get_bishop_attack_table(from_sq, self.pos.all_occupancies);  
+            attacks = get_bishop_attack_table(from_sq, self.deref_pos().all_occupancies);  
 
             //Extract only captures and loop over them
             attacks = attacks.and(opponent_occupancies);
@@ -295,7 +314,7 @@ impl <'a>MoveGenerator<'a> {
             from_sq = rook_bitboard.extract_bit();
 
             //Raw attack table
-            attacks = get_rook_attack_table(from_sq, self.pos.all_occupancies);
+            attacks = get_rook_attack_table(from_sq, self.deref_pos().all_occupancies);
 
             //Extract only captures and loop over them
             attacks = attacks.and(opponent_occupancies);
@@ -310,7 +329,7 @@ impl <'a>MoveGenerator<'a> {
             from_sq = queen_bitboard.extract_bit();
 
             //Raw attack table
-            attacks = get_queen_attack_table(from_sq, self.pos.all_occupancies);
+            attacks = get_queen_attack_table(from_sq, self.deref_pos().all_occupancies);
 
             //Extract only captures and loop over them
             attacks = attacks.and(opponent_occupancies);
@@ -361,13 +380,13 @@ impl <'a>MoveGenerator<'a> {
 
         //Color specific
         //WHITE
-        if self.pos.active_player == Color::White {
-            pawn_bitboard =     self.pos.get_piece_bitboard(Piece::WhitePawn);
-            rook_bitboard =     self.pos.get_piece_bitboard(Piece::WhiteRook);
-            knight_bitboard =   self.pos.get_piece_bitboard(Piece::WhiteKnight);
-            bishop_bitboard =   self.pos.get_piece_bitboard(Piece::WhiteBishop);
-            queen_bitboard =    self.pos.get_piece_bitboard(Piece::WhiteQueen);
-            king_bitboard =     self.pos.get_piece_bitboard(Piece::WhiteKing);
+        if self.deref_pos().active_player == Color::White {
+            pawn_bitboard =     self.deref_pos().get_piece_bitboard(Piece::WhitePawn);
+            rook_bitboard =     self.deref_pos().get_piece_bitboard(Piece::WhiteRook);
+            knight_bitboard =   self.deref_pos().get_piece_bitboard(Piece::WhiteKnight);
+            bishop_bitboard =   self.deref_pos().get_piece_bitboard(Piece::WhiteBishop);
+            queen_bitboard =    self.deref_pos().get_piece_bitboard(Piece::WhiteQueen);
+            king_bitboard =     self.deref_pos().get_piece_bitboard(Piece::WhiteKing);
 
             pawn =   Piece::WhitePawn as u8;
             rook =   Piece::WhiteRook as u8;
@@ -381,7 +400,7 @@ impl <'a>MoveGenerator<'a> {
                 from_sq = pawn_bitboard.extract_bit();
                 to_sq = (from_sq as i8 - 8) as u8;
                 //Quiet
-                if !self.pos.all_occupancies.get_bit(to_sq) {
+                if !self.deref_pos().all_occupancies.get_bit(to_sq) {
                     //to_sq is empty
                     if to_sq >= 8 {
                         //Quiet move
@@ -389,7 +408,7 @@ impl <'a>MoveGenerator<'a> {
 
                         //Double push
                         to_sq = (to_sq as i8 - 8) as u8;
-                        if !self.pos.all_occupancies.get_bit(to_sq) && from_sq / 8 == 6 {
+                        if !self.deref_pos().all_occupancies.get_bit(to_sq) && from_sq / 8 == 6 {
                             self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn, Piece::None as u8, false, true, false, false));
                         }
                     }
@@ -404,30 +423,30 @@ impl <'a>MoveGenerator<'a> {
             }
 
             //Castling kingside
-            if self.pos.castling_ability & (CastlingAbility::WhiteKingSide as u8) != 0 &&              //castling ability
-                (self.pos.all_occupancies.and(Bitboard::from_u64(6917529027641081856))).is_empty() &&   //f1 and g1 are free. 6917529027641081856 is f1 and g1 set
-                !self.pos.is_square_attacked(Square::e1 as u8, Color::Black) &&                         //e1 is notunder attack
-                !self.pos.is_square_attacked(Square::f1 as u8, Color::Black) {                          //f1 is not under attack
+            if self.deref_pos().castling_ability & (CastlingAbility::WhiteKingSide as u8) != 0 &&              //castling ability
+                (self.deref_pos().all_occupancies.and(Bitboard::from_u64(6917529027641081856))).is_empty() &&   //f1 and g1 are free. 6917529027641081856 is f1 and g1 set
+                !self.deref_pos().is_square_attacked(Square::e1 as u8, Color::Black) &&                         //e1 is notunder attack
+                !self.deref_pos().is_square_attacked(Square::f1 as u8, Color::Black) {                          //f1 is not under attack
 
                     self.score_and_add_quiet_move(Move::new(Square::e1 as u8, Square::g1 as u8, Piece::WhiteKing as u8, Piece::None as u8, false, false, false, true))
             }
             //Castling queen
-            if  self.pos.castling_ability & (CastlingAbility::WhiteQueenSide as u8) != 0 &&             //castling ability
-                (self.pos.all_occupancies.and(Bitboard::from_u64(1008806316530991104))).is_empty() &&   //d1, c1 and b1 are free. 1008806316530991104 is d1, c1 and b1 set
-                !self.pos.is_square_attacked(Square::e1 as u8, Color::Black) &&                         //e1 is notunder attack
-                !self.pos.is_square_attacked(Square::d1 as u8, Color::Black) {                          //d1 is not under attack
+            if  self.deref_pos().castling_ability & (CastlingAbility::WhiteQueenSide as u8) != 0 &&             //castling ability
+                (self.deref_pos().all_occupancies.and(Bitboard::from_u64(1008806316530991104))).is_empty() &&   //d1, c1 and b1 are free. 1008806316530991104 is d1, c1 and b1 set
+                !self.deref_pos().is_square_attacked(Square::e1 as u8, Color::Black) &&                         //e1 is notunder attack
+                !self.deref_pos().is_square_attacked(Square::d1 as u8, Color::Black) {                          //d1 is not under attack
 
                     self.score_and_add_quiet_move(Move::new(Square::e1 as u8, Square::c1 as u8, Piece::WhiteKing as u8, Piece::None as u8, false, false, false, true))
             }
         }
         //BLACK
         else {
-            pawn_bitboard = self.pos.get_piece_bitboard(Piece::BlackPawn);
-            rook_bitboard = self.pos.get_piece_bitboard(Piece::BlackRook);
-            knight_bitboard = self.pos.get_piece_bitboard(Piece::BlackKnight);
-            bishop_bitboard = self.pos.get_piece_bitboard(Piece::BlackBishop);
-            queen_bitboard = self.pos.get_piece_bitboard(Piece::BlackQueen);
-            king_bitboard = self.pos.get_piece_bitboard(Piece::BlackKing);
+            pawn_bitboard = self.deref_pos().get_piece_bitboard(Piece::BlackPawn);
+            rook_bitboard = self.deref_pos().get_piece_bitboard(Piece::BlackRook);
+            knight_bitboard = self.deref_pos().get_piece_bitboard(Piece::BlackKnight);
+            bishop_bitboard = self.deref_pos().get_piece_bitboard(Piece::BlackBishop);
+            queen_bitboard = self.deref_pos().get_piece_bitboard(Piece::BlackQueen);
+            king_bitboard = self.deref_pos().get_piece_bitboard(Piece::BlackKing);
 
             pawn =   Piece::BlackPawn as u8;
             rook =   Piece::BlackRook as u8;
@@ -441,7 +460,7 @@ impl <'a>MoveGenerator<'a> {
                 from_sq = pawn_bitboard.extract_bit();
                 to_sq = (from_sq as i8 + 8) as u8;
                 //Quiet
-                if !self.pos.all_occupancies.get_bit(to_sq) {
+                if !self.deref_pos().all_occupancies.get_bit(to_sq) {
                     //to_sq is empty
                     if to_sq <= 55 {
                         //Quiet move
@@ -449,7 +468,7 @@ impl <'a>MoveGenerator<'a> {
 
                         //Double push
                         to_sq = (to_sq as i8 + 8) as u8;
-                        if !self.pos.all_occupancies.get_bit(to_sq) && from_sq / 8 == 1 {
+                        if !self.deref_pos().all_occupancies.get_bit(to_sq) && from_sq / 8 == 1 {
                             self.score_and_add_quiet_move(Move::new(from_sq, to_sq, pawn as u8, Piece::None as u8, false, true, false, false));
                         }
                     }
@@ -464,24 +483,24 @@ impl <'a>MoveGenerator<'a> {
             }
 
             //Castling kingside
-            if  self.pos.castling_ability & (CastlingAbility::BlackKingSide as u8) != 0 &&              //castling ability
-                (self.pos.all_occupancies.and(Bitboard::from_u64(96))).is_empty() &&                    //f8 and g8 are free. 96 is f8 and g8 set
-                !self.pos.is_square_attacked(Square::e8 as u8, Color::White) &&                         //e8 is notunder attack
-                !self.pos.is_square_attacked(Square::f8 as u8, Color::White) {                          //f8 is not under attack
+            if  self.deref_pos().castling_ability & (CastlingAbility::BlackKingSide as u8) != 0 &&              //castling ability
+                (self.deref_pos().all_occupancies.and(Bitboard::from_u64(96))).is_empty() &&                    //f8 and g8 are free. 96 is f8 and g8 set
+                !self.deref_pos().is_square_attacked(Square::e8 as u8, Color::White) &&                         //e8 is notunder attack
+                !self.deref_pos().is_square_attacked(Square::f8 as u8, Color::White) {                          //f8 is not under attack
 
                     self.score_and_add_quiet_move(Move::new(Square::e8 as u8, Square::g8 as u8, Piece::BlackKing as u8, Piece::None as u8, false, false, false, true))
             }
             //Castling queen
-            if  self.pos.castling_ability & (CastlingAbility::BlackQueenSide as u8) != 0 &&             //castling ability
-                (self.pos.all_occupancies.and(Bitboard::from_u64(14))).is_empty() &&                    //d8, c8 and b8 are free. 14 is d8, c8 and b8 set
-                !self.pos.is_square_attacked(Square::e8 as u8, Color::White) &&                         //e8 is notunder attack
-                !self.pos.is_square_attacked(Square::d8 as u8, Color::White) {                          //d8 is not under attack
+            if  self.deref_pos().castling_ability & (CastlingAbility::BlackQueenSide as u8) != 0 &&             //castling ability
+                (self.deref_pos().all_occupancies.and(Bitboard::from_u64(14))).is_empty() &&                    //d8, c8 and b8 are free. 14 is d8, c8 and b8 set
+                !self.deref_pos().is_square_attacked(Square::e8 as u8, Color::White) &&                         //e8 is notunder attack
+                !self.deref_pos().is_square_attacked(Square::d8 as u8, Color::White) {                          //d8 is not under attack
 
                     self.score_and_add_quiet_move(Move::new(Square::e8 as u8, Square::c8 as u8, Piece::BlackKing as u8, Piece::None as u8, false, false, false, true))
             }
         }
 
-        let not_occ = self.pos.all_occupancies.not();
+        let not_occ = self.deref_pos().all_occupancies.not();
 
         //Knight attacks
         while !knight_bitboard.is_empty() {
@@ -501,7 +520,7 @@ impl <'a>MoveGenerator<'a> {
             from_sq = bishop_bitboard.extract_bit();
 
             //Quiet moves
-            quiet = get_bishop_attack_table(from_sq, self.pos.all_occupancies).and(not_occ);
+            quiet = get_bishop_attack_table(from_sq, self.deref_pos().all_occupancies).and(not_occ);
 
             while !quiet.is_empty() {
                 to_sq = quiet.extract_bit();
@@ -514,7 +533,7 @@ impl <'a>MoveGenerator<'a> {
             from_sq = rook_bitboard.extract_bit();
 
             //Quiet moves
-            quiet = get_rook_attack_table(from_sq, self.pos.all_occupancies).and(not_occ);
+            quiet = get_rook_attack_table(from_sq, self.deref_pos().all_occupancies).and(not_occ);
 
             while !quiet.is_empty() {
                 to_sq = quiet.extract_bit();
@@ -527,7 +546,7 @@ impl <'a>MoveGenerator<'a> {
             from_sq = queen_bitboard.extract_bit();
 
             //Quiet moves
-            quiet = get_queen_attack_table(from_sq, self.pos.all_occupancies).and(not_occ);
+            quiet = get_queen_attack_table(from_sq, self.deref_pos().all_occupancies).and(not_occ);
 
             while !quiet.is_empty() {
                 to_sq = quiet.extract_bit();
@@ -560,27 +579,29 @@ impl <'a>MoveGenerator<'a> {
 
     ///Scores a capturing move
     fn score_and_add_capture_move(&mut self, mut cmove: Move) {
-        self.scorer.score_capture(&mut cmove);
+        let scorer = unsafe { & *self.scorer };
+        scorer.score_capture(&mut cmove);
         self.add_move(cmove)
     }
 
     ///Scores a quiet move
     fn score_and_add_quiet_move(&mut self, mut cmove: Move) {
-        self.scorer.score_non_capture(&mut cmove);
+        let scorer = unsafe { & *self.scorer };
+        scorer.score_non_capture(&mut cmove);
         self.add_move(cmove)
     }
 }
 
-impl Iterator for MoveGenerator<'_> {
+impl<M: MoveScorer> Iterator for MoveGenerator<M> {
     type Item = Move;
 
     fn next(&mut self) -> Option<Self::Item> {
         //We have run out
-        if self.extract_index == self.insert_index {
+        while self.extract_index == self.insert_index {
             //Generate more moves
             match self.phase {
                 GenPhase::NotStarted => { self.generate_captures() },
-                GenPhase::DoneCaptures => if self.move_types == MoveTypes::All { self.generate_non_captures() },
+                GenPhase::DoneCaptures => if self.move_types == MoveTypes::All { self.generate_non_captures() } else { return None },
                 GenPhase::DoneAll => return None
             }
         }
@@ -590,6 +611,7 @@ impl Iterator for MoveGenerator<'_> {
         //Sort if wanted
         if self.sort {
             //Find move
+            
             let mut best_index = self.extract_index;
             let mut best_score = self.moves[best_index].score;
             

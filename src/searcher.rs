@@ -1,6 +1,4 @@
-//use rand::{Rng};
-
-use rand::Rng;
+use std::rc::Rc;
 
 use super::*;
 
@@ -37,25 +35,18 @@ pub struct Searcher<'a> {
     io_receiver: &'a IoWrapper,
     pub start_time: SystemTime,
     max_time: i64,
-    depth_reached: u8, 
+    depth_reached: u8,
 
     //Data structures. Shared by threads in future
-    pub killer_moves: &'a mut [[Move; MAX_PLY]; 2],
-    pub history_moves: &'a mut [[u8; 64]; 12],
-    pub repetition_table: &'a mut RepetitionTable,
+    pub killer_moves: [[Move; MAX_PLY]; 2],
+    pub history_moves: [[u8; 64]; 12],
+    pub repetition_table: RepetitionTable,
     pub tt: &'a mut TranspositionTable,
 }
 
-impl <'a>Searcher<'a> {
-    ///Returns a random legal move
-    pub fn find_random_move(pos: &mut Position) {
-        let moves = MoveGenerator::all_moves(pos);
-        let rand = rand::thread_rng().gen_range(0..moves.len());
-        print!("bestmove {}\n", moves[rand]);
-    }
-
+impl<'a> Searcher<'a> {
     ///Initializes a new searcher
-    pub fn new(pos: Position, tt: &mut TranspositionTable, max_time: Option<i64>, io_receiver: &'a IoWrapper) -> Self {
+    pub fn new(pos: Position, tt: &'a mut TranspositionTable, max_time: Option<i64>, io_receiver: &'a IoWrapper) -> Self {
         Self {
             pos,
             nodes: 0,
@@ -67,9 +58,9 @@ impl <'a>Searcher<'a> {
             tt_hits: 0,
             depth_reached: 1,
 
-            killer_moves: &mut [[NULL_MOVE; MAX_PLY]; 2],
-            history_moves: &mut [[0; 64]; 12],
-            repetition_table: &mut RepetitionTable::new(),
+            killer_moves: [[NULL_MOVE; MAX_PLY]; 2],
+            history_moves: [[0; 64]; 12],
+            repetition_table: RepetitionTable::new(),
             tt
         }
     }
@@ -83,7 +74,7 @@ impl <'a>Searcher<'a> {
     }
 
     ///Start a search, max_time = -1 for no limit
-    pub fn search(&mut self, pos: &mut Position, depth: i8, tt: &mut TranspositionTable) -> SearchResult {
+    pub fn search(&mut self, depth: i8) -> SearchResult {
         let mut score = 0;
 
         let mut alpha = -INFINITY;
@@ -125,14 +116,14 @@ impl <'a>Searcher<'a> {
             self.depth_reached += 1;
         }
 
-        let best_move = tt.probe_best_move(pos.zobrist_hash);
+        let best_move = self.tt.probe_best_move(self.pos.zobrist_hash);
 
         print!("bestmove {}\n", best_move);
 
         SearchResult::new(best_move, self.nodes, score, self.depth_reached - 1, !self.stopping, self.tt_hits)
     }
 
-    fn print_pv_line(&self) -> Vec<Move>{
+    fn print_pv_line(&mut self) -> Vec<Move>{
         let old_pos = self.pos;
         let mut r_t = RepetitionTable::new();
 
@@ -233,15 +224,12 @@ impl <'a>Searcher<'a> {
         }
 
         let mut moves = MoveGenerator::new_sorted(&self.pos, MoveTypes::All, self);
-        moves.add_pv_move(self.tt);
+       // moves.add_pv_move(self.tt);
         let mut moves = moves.peekable();
 
         let mut moves_searched = 0;
 
-        while moves.peek().is_some() {
-            //Always OK due to check just before
-            let m = unsafe { moves.next().unwrap_unchecked() };
-            
+        while let Some(m) = moves.next() {
             let old_pos = self.pos;
 
             self.ply += 1;
@@ -369,17 +357,17 @@ impl <'a>Searcher<'a> {
             }
         }
 
-        let mut moves = MoveGenerator::new_sorted(&self.pos, MoveTypes::All, self);
-        moves.add_pv_move(self.tt);
+        let mut moves = MoveGenerator::new_sorted(&self.pos, MoveTypes::Captures, self);
+        //moves.add_pv_move(self.tt);
         let mut moves = moves.peekable();
 
         while moves.peek().is_some() {
             //Always OK due to check just before
             let m = unsafe { moves.next().unwrap_unchecked() };
 
-            let mut old_pos = self.pos;
+            let old_pos = self.pos;
 
-            if !self.pos.make_move(&m, self.repetition_table) {
+            if !self.pos.make_move(&m, &mut self.repetition_table) {
                 self.pos = old_pos;
                 continue;
             }
