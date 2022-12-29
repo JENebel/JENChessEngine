@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use super::*;
 
 pub const MAX_PLY: usize = 64;
@@ -42,6 +40,8 @@ pub struct Searcher<'a> {
     pub history_moves: [[u8; 64]; 12],
     pub repetition_table: RepetitionTable,
     pub tt: &'a mut TranspositionTable,
+    pub pv_lengths: [usize; MAX_PLY],
+    pub pv_table: [[Move; MAX_PLY]; MAX_PLY],
 }
 
 impl<'a> Searcher<'a> {
@@ -61,7 +61,9 @@ impl<'a> Searcher<'a> {
             killer_moves: [[NULL_MOVE; MAX_PLY]; 2],
             history_moves: [[0; 64]; 12],
             repetition_table: RepetitionTable::new(),
-            tt
+            tt,
+            pv_lengths: [0; MAX_PLY],
+            pv_table: [[NULL_MOVE; MAX_PLY]; MAX_PLY],
         }
     }
 
@@ -71,6 +73,18 @@ impl<'a> Searcher<'a> {
             self.stopping = true;
             return;
         }
+    }
+
+    fn insert_pv_node(&mut self, cmove: Move) {
+        let ply = self.ply as usize;
+
+        self.pv_table[ply][ply] = cmove;
+        
+        for next_ply in (ply + 1)..self.pv_lengths[ply + 1] {
+            self.pv_table[ply][next_ply] = self.pv_table[ply + 1][next_ply];
+        }
+
+        self.pv_lengths[ply] = self.pv_lengths[ply + 1];
     }
 
     ///Start a search, max_time = -1 for no limit
@@ -107,23 +121,27 @@ impl<'a> Searcher<'a> {
                 print!("info score mate {} depth {} nodes {} time {} pv ", (MATE_VALUE - score) / 2 + 1, self.depth_reached, self.nodes, self.start_time.elapsed().unwrap().as_millis());
             }
             else {
-                print!("info score cp {} depth {} nodes {} time {} pv", score, self.depth_reached, self.nodes, self.start_time.elapsed().unwrap().as_millis());
+                print!("info score cp {} depth {} nodes {} time {} pv ", score, self.depth_reached, self.nodes, self.start_time.elapsed().unwrap().as_millis());
             }
 
-            self.print_pv_line();
+            //self.print_pv_line();
+            for i in 0..self.pv_lengths[0] {
+                print!("{} ", self.pv_table[0][i]);
+            }
             print!("\n");
             
             self.depth_reached += 1;
         }
 
-        let best_move = self.tt.probe_best_move(self.pos.zobrist_hash);
+        let best_move = self.pv_table[0][0];
+        //let best_move = self.tt.probe_best_move(self.pos.zobrist_hash);
 
         print!("bestmove {}\n", best_move);
 
         SearchResult::new(best_move, self.nodes, score, self.depth_reached - 1, !self.stopping, self.tt_hits)
     }
 
-    fn print_pv_line(&mut self) -> Vec<Move>{
+    /*fn print_pv_line(&mut self) -> Vec<Move>{
         let old_pos = self.pos;
         let mut r_t = RepetitionTable::new();
 
@@ -142,7 +160,7 @@ impl<'a> Searcher<'a> {
         self.pos = old_pos;
 
         line
-    }
+    }*/
 
     #[inline]
     fn negamax(&mut self, depth: u8, alpha: i32, beta: i32) -> i32 {
@@ -154,9 +172,11 @@ impl<'a> Searcher<'a> {
             score = self.tt.probe_score(self.pos.zobrist_hash, depth, alpha, beta, self.ply);
             if score != UNKNOWN_SCORE {
                 self.tt_hits += 1;
-                return score;
+                //return score;
             }
         }
+
+        self.pv_lengths[self.ply as usize] = self.ply as usize;
 
         if self.ply > 0 && self.repetition_table.is_now_in_threefold_repetition() {
             return 0;
@@ -223,8 +243,11 @@ impl<'a> Searcher<'a> {
             }
         }
 
-        let mut moves = MoveGenerator::new_sorted(&self.pos, MoveTypes::All, self);
-       // moves.add_pv_move(self.tt);
+        let moves = MoveGenerator::new_sorted(&self.pos, MoveTypes::All, self);
+        if let Some(m) = self.tt.probe_pv_move(self.pos.zobrist_hash) {
+            moves.(m);
+        }
+        
         let mut moves = moves.peekable();
 
         let mut moves_searched = 0;
@@ -289,6 +312,8 @@ impl<'a> Searcher<'a> {
 
             if score > temp_alpha {
                 best_move = m;
+
+                self.insert_pv_node(m);
 
                 //Beta cut-off
                 if score >= beta {
@@ -357,7 +382,7 @@ impl<'a> Searcher<'a> {
             }
         }
 
-        let mut moves = MoveGenerator::new_sorted(&self.pos, MoveTypes::Captures, self);
+        let moves = MoveGenerator::new_sorted(&self.pos, MoveTypes::Captures, self);
         //moves.add_pv_move(self.tt);
         let mut moves = moves.peekable();
 

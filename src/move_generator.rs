@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use rand::Rng;
 
 use super::*;
@@ -121,7 +119,7 @@ impl MoveGenerator<NonScorer> {
     }
 
     ///Generates all moves unsorted instantly, and returns them
-    pub fn all_moves(pos: &Position) -> Vec<Move>{
+    pub fn all_moves(pos: &Position) -> Vec<Move> {
         MoveGenerator::new_unsorted(pos, MoveTypes::All).collect()
     }
 
@@ -143,7 +141,7 @@ impl<M: MoveScorer> MoveGenerator<M> {
     ///Initializes the generator to a position with a searcher reference for sorting purposes
     pub fn new_sorted(pos: &Position, move_types: MoveTypes, scorer: &M) -> Self {
         Self {
-            pos: pos,
+            pos,
             scorer,
             moves: [NULL_MOVE; MOVE_LIST_SIZE],
             insert_index: 0,
