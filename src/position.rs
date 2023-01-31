@@ -20,8 +20,14 @@ pub struct Position {
     xray_diag_black: Bitboard, // Black pieces xraying the white king
 
     // Pieces currently pinned
-    pinned_white: Bitboard,
-    pinned_black: Bitboard,
+    pinned_hv_white:   Bitboard,
+    pinned_diag_white: Bitboard,
+    pinned_hv_black:   Bitboard,
+    pinned_diag_black: Bitboard,
+
+    // The pin masks for the current position.
+    // This is the 
+    pub pin_mask_white: Bitboard,
 
     /// The check mask for the current position
     /// These are the squares where checking pieces are, and the paths between the king and sliding checking pieces.\
@@ -130,13 +136,15 @@ impl Position {
             black_occupancies,
             all_occupancies,
 
-            xray_hv_white:   Bitboard::default(),
-            xray_hv_black:   Bitboard::default(),
-            xray_diag_white: Bitboard::default(),
-            xray_diag_black: Bitboard::default(),
-            pinned_white:    Bitboard::default(),
-            pinned_black:    Bitboard::default(),
-            check_mask:      Bitboard::default(),
+            xray_hv_white:     Bitboard::default(),
+            xray_hv_black:     Bitboard::default(),
+            xray_diag_white:   Bitboard::default(),
+            xray_diag_black:   Bitboard::default(),
+            pinned_hv_white:   Bitboard::default(),
+            pinned_diag_white: Bitboard::default(),
+            pinned_hv_black:   Bitboard::default(),
+            pinned_diag_black: Bitboard::default(),
+            check_mask:        Bitboard::default(),
 
             active_player,
             castling_ability,
@@ -207,20 +215,38 @@ impl Position {
     }
 
     #[inline(always)]
-    pub fn get_pinned(&self, color: Color) -> Bitboard {
+    pub fn get_hv_pinned(&self, color: Color) -> Bitboard {
         if color == Color::White {
-            self.pinned_white
+            self.pinned_hv_white
         } else {
-            self.pinned_black
+            self.pinned_hv_black
         }
     }
 
     #[inline(always)]
-    pub fn set_pinned(&mut self, color: Color, new: Bitboard) {
+    pub fn get_diag_pinned(&self, color: Color) -> Bitboard {
         if color == Color::White {
-            self.pinned_white = new
+            self.pinned_diag_white
         } else {
-            self.pinned_black = new
+            self.pinned_diag_black
+        }
+    }
+
+    #[inline(always)]
+    pub fn set_hv_pinned(&mut self, color: Color, square: u8) {
+        if color == Color::White {
+            self.pinned_hv_white.set_bit(square)
+        } else {
+            self.pinned_hv_black.set_bit(square)
+        }
+    }
+
+    #[inline(always)]
+    pub fn set_diag_pinned(&mut self, color: Color, square: u8) {
+        if color == Color::White {
+            self.pinned_diag_white.set_bit(square)
+        } else {
+            self.pinned_diag_black.set_bit(square)
         }
     }
 
@@ -346,9 +372,7 @@ impl Position {
                 let hv_from_sq = get_rook_attack_table(square, self.all_occupancies);
                 if hv_from_sq.get_bit(king_pos) && hv_from_sq.and(self.get_hv_xrays(opponent)).is_not_empty() {
                     // Is pinned
-                    let mut old = self.get_pinned(color);
-                    old.set_bit(square);
-                    self.set_pinned(color, old);
+                    self.set_hv_pinned(color, square);
                     continue;
                 }
 
@@ -356,9 +380,7 @@ impl Position {
                 let diag_from_sq = get_bishop_attack_table(square, self.all_occupancies);
                 if diag_from_sq.get_bit(king_pos) && diag_from_sq.and(self.get_diag_xrays(opponent)).is_not_empty() {
                     // Is pinned
-                    let mut old = self.get_pinned(color);
-                    old.set_bit(square);
-                    self.set_pinned(color, old);
+                    self.set_diag_pinned(color, square);
                 }
             }
         }

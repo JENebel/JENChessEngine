@@ -217,7 +217,7 @@ impl Default for Settings {
 pub struct Move {
     pub from_sq: u8,
     pub to_sq: u8,
-    pub piece: Piece,
+    pub piece_type: PieceType,
     pub promotion: Piece,
     pub is_capture: bool,
     pub is_double_push: bool,
