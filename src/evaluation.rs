@@ -1,4 +1,4 @@
-use super::*;
+use crate::{position::*, bitboard::*, attack_tables::*};
 
 pub const MATERIAL_WEIGHTS: [i32; 12] = [100, 300, 350, 500, 1000, 10000, -100, -300, -350, -500, -1000, -10000];
 
@@ -109,16 +109,6 @@ const PASSED_BLACK_PAWN_BONUS: [i32; 8] = [ 200, 150, 100, 75, 50, 30, 10, 0 ];
 const SEMI_OPEN_FILE_SCORE: i32 = 10;
 const OPEN_FILE_SCORE: i32 = 15;
 const PROTECTED_KING_BONUS: i32 = 5;
-
-/*const KNIGHT_UNIT: u32 = 4;
-const BISHOP_UNIT: u32 = 6;
-const ROOK_UNIT: u32 = 7;
-const QUEEN_UNIT: u32 = 13;
-
-const KNIGHT_MOB: i32 = 4;
-const BISHOP_MOB: i32 = 5;
-const ROOK_MOB: i32 = 3;
-const QUEEN_MOB: f32 = 1.5;*/
 
 impl Position {
     pub fn evaluate(&self) -> i32 {
@@ -465,16 +455,4 @@ const fn generate_black_passed_pawn_masks() -> [u64; 64] {
     }
 
     masks
-}
-
-#[cfg(test)]
-mod eval_tests {
-    use crate::*;
-
-    #[test]
-    pub fn eval () {
-        let game = Position::new_from_fen("6k1/ppppprbp/8/8/8/8/PPPPPRBP/6K1 w - - 0 1 ").unwrap();
-        game.pretty_print();
-        println!("{}", game.evaluate());
-    }
 }

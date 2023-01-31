@@ -1,4 +1,4 @@
-use super::*;
+use crate::{position::*, bitboard::*};
 
 include!(concat!(env!("OUT_DIR"), "/consts.rs"));
 
@@ -32,7 +32,7 @@ pub fn get_rook_attack_table(square: u8, occ: Bitboard) -> Bitboard {
         attacks
     )
 }
- 
+
 pub fn get_bishop_attack_table(square: u8, occ: Bitboard) -> Bitboard {
     let attacks = SLIDING_ATTACKS[(BISHOP_OFFSETS[square as usize] as u64 + pext(occ.to_u64(), BISHOP_MASK[square as usize])) as usize];
     Bitboard::from_u64(

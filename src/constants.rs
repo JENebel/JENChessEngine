@@ -1,3 +1,8 @@
+pub const PIECE_KEYS: [[u64; 64]; 12] = generate_piece_keys();
+pub const ENPASSANT_KEYS: [u64; 64] = generate_enpassant_keys();
+pub const CASTLE_KEYS: [u64; 16] = generate_castle_keys();
+pub const SIDE_KEY: u64 = get_random_u64_number(4084590338).0;
+
 pub const fn generate_castle_keys() -> [u64; 16] {
     let mut keys = [0; 16];
 

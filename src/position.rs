@@ -1,4 +1,6 @@
-use super::*;
+use std::fmt::Display;
+
+use crate::{constants::*, bitboard::*, attack_tables::*};
 
 #[derive(Copy, Clone)]
 #[derive(PartialEq)]
@@ -28,7 +30,7 @@ pub const SQUARE_STRINGS: [&str; 65] = [
     "None"
 ];
 
-pub const SQUARES: [Square; 65] = [
+pub const SQUARES: [Square; 64] = [
     Square::a8,  Square::b8,  Square::c8,  Square::d8,  Square::e8,  Square::f8,  Square::g8,  Square::h8,
     Square::a7,  Square::b7,  Square::c7,  Square::d7,  Square::e7,  Square::f7,  Square::g7,  Square::h7,
     Square::a6,  Square::b6,  Square::c6,  Square::d6,  Square::e6,  Square::f6,  Square::g6,  Square::h6,
@@ -37,7 +39,6 @@ pub const SQUARES: [Square; 65] = [
     Square::a3,  Square::b3,  Square::c3,  Square::d3,  Square::e3,  Square::f3,  Square::g3,  Square::h3,
     Square::a2,  Square::b2,  Square::c2,  Square::d2,  Square::e2,  Square::f2,  Square::g2,  Square::h2,
     Square::a1,  Square::b1,  Square::c1,  Square::d1,  Square::e1,  Square::f1,  Square::g1,  Square::h1, 
-    Square::None
 ];
 
 pub fn square_from_string(string: &str) -> Square {
@@ -65,19 +66,30 @@ pub enum Color {
 
 #[derive(Clone, Copy)]
 pub enum Piece {
-    WhitePawn   = 0,
+    WhitePawn = 0,
     WhiteKnight = 1,
     WhiteBishop = 2,
-    WhiteRook   = 3,
-    WhiteQueen  = 4,
-    WhiteKing   = 5,
-    BlackPawn   = 6,
+    WhiteRook = 3,
+    WhiteQueen = 4,
+    WhiteKing = 5,
+    BlackPawn = 6,
     BlackKnight = 7,
     BlackBishop = 8,
-    BlackRook   = 9,
-    BlackQueen  = 10,
-    BlackKing   = 11,
-    None        = 12,
+    BlackRook = 9,
+    BlackQueen = 10,
+    BlackKing = 11,
+}
+
+impl Display for Piece {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", PIECE_STRINGS[*self as usize])
+    }
+}
+
+impl Default for Piece {
+    fn default() -> Self {
+        Self::WhitePawn
+    }
 }
 
 pub const PIECE_STRINGS: [&str; 13] = ["P", "N", "B", "R", "Q", "K", "p", "n", "b", "r", "q", "k", "None"];
@@ -120,6 +132,8 @@ pub struct Position {
     pub full_moves: u16,
     pub half_moves: u8,
     pub zobrist_hash: u64,
+
+    // Repetition table should be included
 }
 
 impl Position {

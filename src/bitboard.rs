@@ -1,4 +1,4 @@
-use super::*;
+use crate::position::Square;
 
 #[derive(Clone, Copy)]
 pub struct Bitboard {
