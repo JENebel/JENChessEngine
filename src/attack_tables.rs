@@ -1,4 +1,4 @@
-use crate::{position::*, bitboard::*};
+use crate::{bitboard::*, definitions::*};
 
 include!(concat!(env!("OUT_DIR"), "/consts.rs"));
 

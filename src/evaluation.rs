@@ -1,106 +1,6 @@
-use crate::{position::*, bitboard::*, attack_tables::*};
-
-pub const MATERIAL_WEIGHTS: [i32; 12] = [100, 300, 350, 500, 1000, 10000, -100, -300, -350, -500, -1000, -10000];
-
-// pawn positional score
-pub const PAWN_SCORES: [i32; 64] = 
-[
-    90,  90,  90,  90,  90,  90,  90,  90,
-    30,  30,  30,  40,  40,  30,  30,  30,
-    20,  20,  20,  30,  30,  30,  20,  20,
-    10,  10,  10,  20,  20,  10,  10,  10,
-     5,   5,  10,  20,  20,   5,   5,   5,
-     0,   0,   0,   5,   5,   0,   0,   0,
-     0,   0,   0, -10, -10,   0,   0,   0,
-     0,   0,   0,   0,   0,   0,   0,   0
-];
-
-// knight positional score
-pub const KNIGHT_SCORES: [i32; 64] = 
-[
-    -5,   0,   0,   0,   0,   0,   0,  -5,
-    -5,   0,   0,  10,  10,   0,   0,  -5,
-    -5,   5,  20,  20,  20,  20,   5,  -5,
-    -5,  10,  20,  30,  30,  20,  10,  -5,
-    -5,  10,  20,  30,  30,  20,  10,  -5,
-    -5,   5,  20,  10,  10,  20,   5,  -5,
-    -5,   0,   0,   0,   0,   0,   0,  -5,
-    -5, -10,   0,   0,   0,   0, -10,  -5
-];
-
-// bishop positional score
-pub const BISHOP_SCORES: [i32; 64] = 
-[
-     0,   0,   0,   0,   0,   0,   0,   0,
-     0,   0,   0,   0,   0,   0,   0,   0,
-     0,   0,   0,  10,  10,   0,   0,   0,
-     0,   0,  10,  20,  20,  10,   0,   0,
-     0,   0,  10,  20,  20,  10,   0,   0,
-     0,  10,   0,   0,   0,   0,  10,   0,
-     0,  30,   0,   0,   0,   0,  30,   0,
-     0,   0, -10,   0,   0, -10,   0,   0
-
-];
-
-// rook positional score
-pub const ROOK_SCORES: [i32; 64] = 
-[
-    50,  50,  50,  50,  50,  50,  50,  50,
-    50,  50,  50,  50,  50,  50,  50,  50,
-     0,   0,  10,  20,  20,  10,   0,   0,
-     0,   0,  10,  20,  20,  10,   0,   0,
-     0,   0,  10,  20,  20,  10,   0,   0,
-     0,   0,  10,  20,  20,  10,   0,   0,
-     0,   0,  10,  20,  20,  10,   0,   0,
-     0,   0,   0,  20,  20,   0,   0,   0
-
-];
-
-// king positional score
-pub const KING_SCORES: [i32; 64] = 
-[
-     0,   0,   0,   0,   0,   0,   0,   0,
-     0,   0,   5,   5,   5,   5,   0,   0,
-     0,   5,   5,  10,  10,   5,   5,   0,
-     0,   5,  10,  20,  20,  10,   5,   0,
-     0,   5,  10,  20,  20,  10,   5,   0,
-     0,   0,   5,  10,  10,   5,   0,   0,
-     0,   5,   5,  -5,  -5,   0,   5,   0,
-     0,   0,   5,   0, -15,   0,  10,   0
-];
-
-// mirror positional score tables for opposite side
-pub const MIRRORED: [usize; 64] = 
-[
-	56, 57, 58, 59, 60, 61, 62, 63,
-	48, 49, 50, 51, 52, 53, 54, 55,
-	40, 41, 42, 43, 44, 45, 46, 47,
-	32, 33, 34, 35, 36, 37, 38, 39,
-	24, 25, 26, 27, 28, 29, 30, 31,
-	16, 17, 18, 19, 20, 21, 22, 23,
-	8,  9,  10, 11, 12, 13, 14, 15,
-	0,  1,  2,  3,  4,  5,  6,  7
-];
-
-pub const LOOKUP_RANK: [usize; 64] =
-[
-    7, 7, 7, 7, 7, 7, 7, 7,
-    6, 6, 6, 6, 6, 6, 6, 6,
-    5, 5, 5, 5, 5, 5, 5, 5,
-    4, 4, 4, 4, 4, 4, 4, 4,
-    3, 3, 3, 3, 3, 3, 3, 3,
-    2, 2, 2, 2, 2, 2, 2, 2,
-    1, 1, 1, 1, 1, 1, 1, 1,
-	0, 0, 0, 0, 0, 0, 0, 0
-];
+use crate::{position::*, bitboard::*, attack_tables::*, constants::*, definitions::*};
 
 
-const FILE_MASKS: [u64; 64] = generate_file_masks();
-const RANK_MASKS: [u64; 64] = generate_rank_masks();
-const ISOLATED_MASKS: [u64; 64] = generate_isolated_pawn_masks();
-
-const WHITE_PASSED_PAWN_MASKS: [u64; 64] = generate_white_passed_pawn_masks();
-const BLACK_PASSED_PAWN_MASKS: [u64; 64] = generate_black_passed_pawn_masks();
 
 const STACKED_PAWN_PENALTY: i32 = -10;
 const ISOLATED_PAWN_PENALTY: i32 = -10;
@@ -110,6 +10,8 @@ const SEMI_OPEN_FILE_SCORE: i32 = 10;
 const OPEN_FILE_SCORE: i32 = 15;
 const PROTECTED_KING_BONUS: i32 = 5;
 
+use Piece::*;
+
 impl Position {
     pub fn evaluate(&self) -> i32 {
         let mut score: i32 = 0;
@@ -117,9 +19,8 @@ impl Position {
         let mut stacked_pawns;
 
         for bb in 0..12 {
-            let mut board = self.bitboards[bb];
-            while !board.is_empty() {
-                let square = board.extract_bit();
+            let mut board = self.get_bitboard(bb);
+            while let Some(square) = board.extract_bit() {
                 score += MATERIAL_WEIGHTS[bb];
                 match bb {
                     //White pawns
@@ -127,22 +28,22 @@ impl Position {
                         score += PAWN_SCORES[square as usize];
 
                         //Stacked pawn penalty
-                        stacked_pawns = self.get_piece_bitboard(Piece::WhitePawn)
+                        stacked_pawns = self.get_piece_bitboard(WhitePawn)
                                             .and(Bitboard::from_u64(FILE_MASKS[square as usize]))
-                                            .pop_count();
+                                            .count();
                         if stacked_pawns > 1 {
                             score += stacked_pawns as i32 * STACKED_PAWN_PENALTY;
                         }
 
                         //Isolated pawn penalty
-                        if self.get_piece_bitboard(Piece::WhitePawn)
+                        if self.get_piece_bitboard(WhitePawn)
                                 .and(Bitboard::from_u64(ISOLATED_MASKS[square as usize]))
                                 .is_empty() {
                             score += ISOLATED_PAWN_PENALTY;
                         }
 
                         //Passed pawn penalty
-                        if self.get_piece_bitboard(Piece::BlackPawn)
+                        if self.get_piece_bitboard(BlackPawn)
                             .and(Bitboard::from_u64(WHITE_PASSED_PAWN_MASKS[square as usize]))
                             .is_empty() {
                             score += PASSED_WHITE_PAWN_BONUS[LOOKUP_RANK[square as usize]];
@@ -154,7 +55,7 @@ impl Position {
 
                         //Mobility
                         //score += (get_knight_attack_table(square).pop_count() - KNIGHT_UNIT) as i32 * KNIGHT_MOB;
-                        score += get_knight_attack_table(square).pop_count() as i32;
+                        score += get_knight_attack_table(square).count() as i32;
                     },
                     //White bishops
                     2  => {
@@ -162,7 +63,7 @@ impl Position {
 
                         //Mobility
                         //score += (get_bishop_attack_table(square, self.all_occupancies).pop_count() - BISHOP_UNIT) as i32 * BISHOP_MOB;
-                        score += (get_bishop_attack_table(square, self.all_occupancies).pop_count()) as i32;
+                        score += (get_bishop_attack_table(square, self.all_occupancies).count()) as i32;
 
                     },
                     //White Rooks
@@ -170,71 +71,71 @@ impl Position {
                         score += ROOK_SCORES[square as usize];
 
                         //Semi open file bonus
-                        if self.get_piece_bitboard(Piece::WhitePawn)
+                        if self.get_piece_bitboard(WhitePawn)
                             .and(Bitboard::from_u64(FILE_MASKS[square as usize]))
                             .is_empty() {
                             score += SEMI_OPEN_FILE_SCORE;
                         }
 
                         //Open file bonus
-                        if (self.get_piece_bitboard(Piece::WhitePawn)
-                                .or(self.get_piece_bitboard(Piece::BlackPawn)))
+                        if (self.get_piece_bitboard(WhitePawn)
+                                .or(self.get_piece_bitboard(BlackPawn)))
                                     .and(Bitboard::from_u64(FILE_MASKS[square as usize])).is_empty() {
                             score += OPEN_FILE_SCORE;
                         }
 
                         //Mobility
                         //score += (get_rook_attack_table(square, self.all_occupancies).pop_count() - ROOK_UNIT) as i32 * ROOK_MOB;
-                        score += get_rook_attack_table(square, self.all_occupancies).pop_count() as i32;
+                        score += get_rook_attack_table(square, self.all_occupancies).count() as i32;
                     },
                     //White queen
                     4 => {
                         //Mobility
                         //score += ((get_queen_attack_table(square, self.all_occupancies).pop_count() - QUEEN_UNIT) as f32 * QUEEN_MOB) as i32;
-                        score += get_queen_attack_table(square, self.all_occupancies).pop_count() as i32;
+                        score += get_queen_attack_table(square, self.all_occupancies).count() as i32;
                     },
                     //White king
                     5  => {
                         score += KING_SCORES[square as usize];
 
                         //Semi open file penalty
-                        if self.get_piece_bitboard(Piece::WhitePawn)
+                        if self.get_piece_bitboard(WhitePawn)
                             .and(Bitboard::from_u64(FILE_MASKS[square as usize]))
                             .is_empty() {
                             score -= SEMI_OPEN_FILE_SCORE;
                         }
 
                         //Open file penalty
-                        if (self.get_piece_bitboard(Piece::WhitePawn)
-                                .or(self.get_piece_bitboard(Piece::BlackPawn)))
+                        if (self.get_piece_bitboard(WhitePawn)
+                                .or(self.get_piece_bitboard(BlackPawn)))
                                     .and(Bitboard::from_u64(FILE_MASKS[square as usize])).is_empty() {
                             score -= OPEN_FILE_SCORE;
                         }
 
                         //King safety
-                        score += get_king_attack_table(square).and(self.white_occupancies).pop_count() as i32 * PROTECTED_KING_BONUS;
+                        score += get_king_attack_table(square).and(self.white_occupancies).count() as i32 * PROTECTED_KING_BONUS;
                     },
                     //Black pawns
                     6  => {
                         score -= PAWN_SCORES[MIRRORED[square as usize]];
                         
                         //Stacked pawn penalty
-                        stacked_pawns = self.get_piece_bitboard(Piece::BlackPawn)
+                        stacked_pawns = self.get_piece_bitboard(BlackPawn)
                                             .and(Bitboard::from_u64(FILE_MASKS[square as usize]))
-                                            .pop_count();
+                                            .count();
                         if stacked_pawns > 1 {
                             score -= stacked_pawns as i32 * STACKED_PAWN_PENALTY;
                         }
 
                         //Isolated pawn penalty
-                        if self.get_piece_bitboard(Piece::BlackPawn)
+                        if self.get_piece_bitboard(BlackPawn)
                             .and(Bitboard::from_u64(ISOLATED_MASKS[square as usize]))
                             .is_empty() {
                             score -= ISOLATED_PAWN_PENALTY;
                         }
 
                         //Passed pawn penalty
-                        if self.get_piece_bitboard(Piece::WhitePawn)
+                        if self.get_piece_bitboard(WhitePawn)
                             .and(Bitboard::from_u64(BLACK_PASSED_PAWN_MASKS[square as usize]))
                             .is_empty() {
                             score -= PASSED_BLACK_PAWN_BONUS[LOOKUP_RANK[square as usize]];
@@ -246,7 +147,7 @@ impl Position {
 
                         //Mobility
                         //score -= (get_knight_attack_table(square).pop_count() - KNIGHT_UNIT) as i32 * KNIGHT_MOB;
-                        score -= get_knight_attack_table(square).pop_count() as i32;
+                        score -= get_knight_attack_table(square).count() as i32;
                     },
                     //Black bishop
                     8  => {
@@ -254,205 +155,62 @@ impl Position {
 
                         //Mobility
                         //score -= (get_bishop_attack_table(square, self.all_occupancies).pop_count() - BISHOP_UNIT) as i32 * BISHOP_MOB;
-                        score -= get_bishop_attack_table(square, self.all_occupancies).pop_count() as i32;
+                        score -= get_bishop_attack_table(square, self.all_occupancies).count() as i32;
                     },
                     //Black rooks
                     9  => {
                         score -= ROOK_SCORES[MIRRORED[square as usize]];
 
                         //Semi open file bonus
-                        if self.get_piece_bitboard(Piece::BlackPawn)
+                        if self.get_piece_bitboard(BlackPawn)
                             .and(Bitboard::from_u64(FILE_MASKS[square as usize]))
                             .is_empty() {
                             score -= SEMI_OPEN_FILE_SCORE;
                         }
 
                         //Open file bonus
-                        if (self.get_piece_bitboard(Piece::BlackPawn)
-                                .or(self.get_piece_bitboard(Piece::WhitePawn)))
+                        if (self.get_piece_bitboard(BlackPawn)
+                                .or(self.get_piece_bitboard(WhitePawn)))
                                     .and(Bitboard::from_u64(FILE_MASKS[square as usize])).is_empty() {
                             score -= OPEN_FILE_SCORE;
                         }
 
                         //Mobility
                         //score -= (get_rook_attack_table(square, self.all_occupancies).pop_count() - ROOK_UNIT) as i32 * ROOK_MOB;
-                        score -= get_rook_attack_table(square, self.all_occupancies).pop_count() as i32;
+                        score -= get_rook_attack_table(square, self.all_occupancies).count() as i32;
                     },
                     //Black queen
                     10 => {
                         //Mobility
                         //score -= ((get_queen_attack_table(square, self.all_occupancies).pop_count() - QUEEN_UNIT) as f32 * QUEEN_MOB) as i32;
-                        score -= get_queen_attack_table(square, self.all_occupancies).pop_count() as i32;
+                        score -= get_queen_attack_table(square, self.all_occupancies).count() as i32;
                     }
                     //Black king
                     11 => {
                         score -= KING_SCORES[MIRRORED[square as usize]];
 
                         //Semi open file penalty
-                        if self.get_piece_bitboard(Piece::BlackPawn)
+                        if self.get_piece_bitboard(BlackPawn)
                             .and(Bitboard::from_u64(FILE_MASKS[square as usize]))
                             .is_empty() {
                             score += SEMI_OPEN_FILE_SCORE;
                         }
 
                         //Open file penalty
-                        if (self.get_piece_bitboard(Piece::BlackPawn)
-                                .or(self.get_piece_bitboard(Piece::WhitePawn)))
+                        if (self.get_piece_bitboard(BlackPawn)
+                                .or(self.get_piece_bitboard(WhitePawn)))
                                     .and(Bitboard::from_u64(FILE_MASKS[square as usize])).is_empty() {
                             score += OPEN_FILE_SCORE;
                         }
 
                         //King safety
-                        score -= get_king_attack_table(square).and(self.black_occupancies).pop_count() as i32 * PROTECTED_KING_BONUS;
+                        score -= get_king_attack_table(square).and(self.black_occupancies).count() as i32 * PROTECTED_KING_BONUS;
                     },
                     _ => unreachable!()
                 };
             }
         }
 
-        if self.active_player == Color::White { score } else { -score }
+        if self.active_player == Color::White { score } else { -score } // Colud avoid branching here
     }
-}
-
-const fn generate_file_masks() -> [u64; 64] {
-    let mut masks = [0; 64];
-    
-    let mut r = 0;
-    while r < 8 {
-        let mut f = 0;
-        while f < 8 {
-            let mut mask = 0;
-            
-
-            let mut i = 0;
-            while i < 8 {
-                mask |= (1 << f) << i*8;
-                i += 1;
-            }
-
-            masks[r * 8 + f] = mask;
-
-            f += 1;
-        }
-        r += 1;
-    }
-
-    masks
-}
-
-const fn generate_rank_masks() -> [u64; 64] {
-    let mut masks = [0; 64];
-    
-    let mut r = 0;
-    while r < 8 {
-        let mut f = 0;
-        while f < 8 {
-            let mut mask = 0;
-            
-            let mut i = 0;
-            while i < 8 {
-                mask |= (1 << i) << 8*f;
-                i += 1;
-            }
-
-            masks[r * 8 + f] = mask;
-
-            f += 1;
-        }
-        r += 1;
-    }
-
-    masks
-}
-
-const fn generate_isolated_pawn_masks() -> [u64; 64] {
-    let mut masks = [0; 64];
-    
-    let mut r = 0;
-    while r < 8 {
-        let mut f = 0;
-        while f < 8 {
-            let mut mask = 0;
-
-            if f > 0 {
-                mask |= FILE_MASKS[r*8+f - 1]
-            }
-            if f < 7 {
-                mask |= FILE_MASKS[r*8+f + 1]
-            }
-
-            masks[r*8+f] = mask;
-            
-            f += 1;
-        }
-        r += 1;
-    }
-
-    masks
-}
-
-const fn generate_white_passed_pawn_masks() -> [u64; 64] {
-    let mut masks = [0; 64];
-    
-    let mut r = 0;
-    while r < 8 {
-        let mut f = 0;
-        while f < 8 {
-            let mut mask = 0;
-
-            mask |= FILE_MASKS[r*8+f];
-
-            if f > 0 {
-                mask |= FILE_MASKS[r*8+f - 1]
-            }
-            if f < 7 {
-                mask |= FILE_MASKS[r*8+f + 1]
-            }
-            //For all ranks lower
-            let mut rr = 7;
-            while rr > r {
-                mask ^= RANK_MASKS[rr*8] & mask;
-                rr -= 1;
-            }
-            masks[r*8+f] = mask;
-            
-            f += 1;
-        }
-        r += 1;
-    }
-
-    masks
-}
-
-const fn generate_black_passed_pawn_masks() -> [u64; 64] {
-    let mut masks = [0; 64];
-    
-    let mut r = 0;
-    while r < 8 {
-        let mut f = 0;
-        while f < 8 {
-            let mut mask = 0;
-
-            mask |= FILE_MASKS[r*8+f];
-
-            if f > 0 {
-                mask |= FILE_MASKS[r*8+f - 1]
-            }
-            if f < 7 {
-                mask |= FILE_MASKS[r*8+f + 1]
-            }
-            //For all ranks lower
-            let mut rr = 0;
-            while rr < r {
-                mask ^= RANK_MASKS[rr*8] & mask;
-                rr += 1;
-            }
-            masks[r*8+f] = mask;
-            
-            f += 1;
-        }
-        r += 1;
-    }
-
-    masks
 }

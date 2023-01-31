@@ -1,23 +1,6 @@
-use std::mem::MaybeUninit;
+use crate::{position::Position, definitions::*, bitboard::Bitboard};
 
-use crate::{cmove::Move, position::Position};
-
-#[derive(PartialEq)]
-pub enum MoveTypes {
-    All,
-    CapturesOnly,
-}
-
-enum GenPhase {
-    Captures,
-    NonCaptures,
-    Done,
-}
-
-/// Lazily generates pseudo legal moves
 pub struct MoveGenerator {
-    position: Position,
-
     move_types: MoveTypes,
     phase: GenPhase,
     is_sorting: bool,
@@ -28,23 +11,40 @@ pub struct MoveGenerator {
     move_list: [Move; 100],
 }
 
-impl Iterator for MoveGenerator {
-    type Item = Move;
+impl MoveGenerator {
+    /// Creates a new move generator
+    pub fn new(position: &Position, move_types: MoveTypes, sort: bool) -> Self {
+        Self {
+            move_types,
+            phase: Default::default(),
+            is_sorting: sort,
+            
+            insert_index: 0,
+            extract_index: 0,
 
-    fn next(&mut self) -> Option<Self::Item> {
+            move_list: [Default::default(); 100], // Check if this is necessary
+        }
+    }
+
+    pub fn add_pv_move(&mut self, pv_move: Move) {
+        self.insert(pv_move)
+    }
+
+    /// Gets the next move in the position
+    pub fn next_move(&mut self, pos: &Position) -> Option<Move> {
         // Try generating more moves until some are found, or there are none left
         while self.extract_index == self.insert_index {
             match self.phase {
-                GenPhase::Captures => {
-                    self.generate_captures();
+                GenPhase::Interesting => {
+                    self.generate_interesting_moves(pos);
                     if self.move_types == MoveTypes::All {
-                        self.phase = GenPhase::NonCaptures;
+                        self.phase = GenPhase::Quiet;
                     } else {
                         self.phase = GenPhase::Done;
                     }
                 },
-                GenPhase::NonCaptures => {
-                    self.generate_non_captures();
+                GenPhase::Quiet => {
+                    self.generate_quiet_moves(pos);
                     self.phase = GenPhase::Done;
                 },
                 GenPhase::Done => return None,
@@ -56,30 +56,6 @@ impl Iterator for MoveGenerator {
         } else {
             Some(self.extract_first())
         }
-    }
-}
-
-impl MoveGenerator {
-    pub fn new(position: Position, move_types: MoveTypes, sorted: bool, best: Option<Move>) -> Self {
-        let mut generator = Self {
-            position,
-
-            move_types,
-            phase: GenPhase::Captures,
-            is_sorting: sorted,
-
-            insert_index: 0,
-            extract_index: 0,
-
-            move_list: [Default::default(); 100], // Check if this is necessary
-        };
-
-        if let Some(m) = best {
-            generator.move_list[0] = m;
-            generator.insert_index += 1;
-        }
-        
-        generator
     }
 
     /// Extracts the best move in the list
@@ -109,13 +85,50 @@ impl MoveGenerator {
         extracted
     }
 
-    /// Generate all captures
-    fn generate_captures(&mut self) {
+    fn insert_and_score(&mut self, new_move: &mut Move) {
+        if self.is_sorting {
+            Self::score_move(new_move) // Maybe handle scoring different
+        }
+        self.insert(*new_move)
+    }
+
+    #[inline(always)]
+    fn insert(&mut self, new_move: Move) {
+        self.move_list[self.insert_index] = new_move;
+        self.insert_index += 1;
+    }
+
+    pub fn score_move(m: &mut Move) {
+        m.score = 10; // Fake it. Should probably be moved to seperate place
+    }
+
+
+    /// Generate interesting moves
+    /// 
+    /// Check evasions, captures, promotions
+    fn generate_interesting_moves(&mut self, pos: &Position) {
+        if pos.is_in_check() {
+            self.generate_check_evasions(pos);
+            return
+        }
+    }
+
+    /// Generate check evasions
+    fn generate_check_evasions(&mut self, pos: &Position) {
+
+        ///////
+
+        // Should not generate more moves as this generates all possible
+        self.phase = GenPhase::Done
+    }
+
+    /// Generate quiet moves
+    fn generate_quiet_moves(&mut self, pos: &Position) {
 
     }
 
-    /// Generate all non-captures
-    fn generate_non_captures(&mut self) {
-
+    /// Generates all legal king moves
+    fn generate_king_moves() {
+        
     }
 }
