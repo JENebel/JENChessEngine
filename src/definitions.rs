@@ -4,7 +4,7 @@
 /// General                          ///
 ////////////////////////////////////////
 
-use std::{fmt::Display, default};
+use std::{fmt::Display};
 
 use crate::{move_generator::MoveGenerator, position::Position};
 
@@ -22,11 +22,10 @@ pub enum Square {
     a4,  b4,  c4,  d4,  e4,  f4,  g4,  h4,
     a3,  b3,  c3,  d3,  e3,  f3,  g3,  h3,
     a2,  b2,  c2,  d2,  e2,  f2,  g2,  h2,
-    a1,  b1,  c1,  d1,  e1,  f1,  g1,  h1, 
-    None
+    a1,  b1,  c1,  d1,  e1,  f1,  g1,  h1
 }
 
-pub const SQUARE_STRINGS: [&str; 65] = [
+pub const SQUARE_STRINGS: [&str; 64] = [
     "a8",  "b8",  "c8",  "d8",  "e8",  "f8",  "g8",  "h8",
     "a7",  "b7",  "c7",  "d7",  "e7",  "f7",  "g7",  "h7",
     "a6",  "b6",  "c6",  "d6",  "e6",  "f6",  "g6",  "h6",
@@ -34,11 +33,10 @@ pub const SQUARE_STRINGS: [&str; 65] = [
     "a4",  "b4",  "c4",  "d4",  "e4",  "f4",  "g4",  "h4",
     "a3",  "b3",  "c3",  "d3",  "e3",  "f3",  "g3",  "h3",
     "a2",  "b2",  "c2",  "d2",  "e2",  "f2",  "g2",  "h2",
-    "a1",  "b1",  "c1",  "d1",  "e1",  "f1",  "g1",  "h1", 
-    "None"
+    "a1",  "b1",  "c1",  "d1",  "e1",  "f1",  "g1",  "h1",
 ];
 
-pub const SQUARES: [Square; 65] = [
+pub const SQUARES: [Square; 64] = [
     Square::a8,  Square::b8,  Square::c8,  Square::d8,  Square::e8,  Square::f8,  Square::g8,  Square::h8,
     Square::a7,  Square::b7,  Square::c7,  Square::d7,  Square::e7,  Square::f7,  Square::g7,  Square::h7,
     Square::a6,  Square::b6,  Square::c6,  Square::d6,  Square::e6,  Square::f6,  Square::g6,  Square::h6,
@@ -47,22 +45,6 @@ pub const SQUARES: [Square; 65] = [
     Square::a3,  Square::b3,  Square::c3,  Square::d3,  Square::e3,  Square::f3,  Square::g3,  Square::h3,
     Square::a2,  Square::b2,  Square::c2,  Square::d2,  Square::e2,  Square::f2,  Square::g2,  Square::h2,
     Square::a1,  Square::b1,  Square::c1,  Square::d1,  Square::e1,  Square::f1,  Square::g1,  Square::h1,
-    Square::None
-];
-
-pub const PIECES: [Piece; 12] = [
-    WhitePawn,
-    WhiteKnight,
-    WhiteBishop,
-    WhiteRook,
-    WhiteQueen,
-    WhiteKing,
-    BlackPawn,
-    BlackKnight,
-    BlackBishop,
-    BlackRook,
-    BlackQueen,
-    BlackKing,
 ];
 
 pub fn square_from_string(string: &str) -> Square {
@@ -88,7 +70,16 @@ pub enum Color {
     Black = 6,
 }
 
-#[derive(Clone, Copy)]
+impl Display for Color {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", match self {
+            Color::White => "White",
+            Color::Black => "Black",
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
 pub enum PieceType {
     Pawn,
     Knight,
@@ -104,7 +95,7 @@ impl Default for PieceType {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Piece {
     WhitePawn,
     WhiteKnight,
@@ -197,9 +188,9 @@ impl Default for MoveTypes {
 
 #[derive(Copy, Clone)]
 pub enum GenPhase {
-    Interesting,
-    Quiet,
-    Done,
+    Interesting = 0, // Beware that int value is used as literal in move gen macros!
+    Quiet       = 1,
+    Done        = 2,
 }
 
 impl Default for GenPhase {
@@ -219,7 +210,7 @@ impl Default for Settings {
     }
 }
 
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Default, Debug)]
 pub struct Move {
     pub from_sq: u8,
     pub to_sq: u8,

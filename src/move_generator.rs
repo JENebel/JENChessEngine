@@ -1,28 +1,38 @@
 use crate::{position::Position, definitions::*, bitboard::Bitboard};
+use PieceType::*;
 
 // Macros to expand const generics for move generation
-macro_rules! generate_moves_with_color {
-    ($move_gen: expr, $pos: expr, $phase: expr, $color: expr) => {
-        match $move_gen.is_sorting {
-            true =>  $move_gen.generate_moves::<true,  $phase, true>($pos),
-            false => $move_gen.generate_moves::<false, $phase, false>($pos),
+macro_rules! generate_moves_match_has_enpassant {
+    ($move_gen: expr, $pos: expr, $is_white: expr, $phase: expr, $is_sorting: expr) => {
+        match $pos.enpassant_square.is_some() {
+            true =>  $move_gen.generate_moves::<$is_white, $phase, $is_sorting, true>($pos),
+            false => $move_gen.generate_moves::<$is_white, $phase, $is_sorting, false>($pos),
         }
     };
 }
-macro_rules! generate_moves_with_move_types {
-    ($move_gen: expr, $pos: expr, $phase: expr) => {
-        match $pos.active_player {
-            Color::White => generate_moves_with_color!($move_gen, $pos, $phase, true),
-            Color::Black => generate_moves_with_color!($move_gen, $pos, $phase, false),
+macro_rules! generate_moves_match_is_sorting {
+    ($move_gen: expr, $pos: expr, $is_white: expr, $phase: expr) => {
+        match $move_gen.is_sorting {
+            true =>  generate_moves_match_has_enpassant!($move_gen, $pos, $is_white, $phase, true),
+            false => generate_moves_match_has_enpassant!($move_gen, $pos, $is_white, $phase, true),
+        }
+    };
+}
+macro_rules! generate_moves_match_phase {
+    ($move_gen: expr, $pos: expr, $is_white: expr) => {
+        match $move_gen.phase {
+            GenPhase::Interesting => generate_moves_match_is_sorting!($move_gen, $pos, $is_white, 0),
+            GenPhase::Quiet =>       generate_moves_match_is_sorting!($move_gen, $pos, $is_white, 1),
+            GenPhase::Done =>        return None
         }
     };
 }
 macro_rules! generate_moves {
     ($move_gen: expr, $pos: expr) => {
-        match $move_gen.phase {
-            GenPhase::Interesting => generate_moves_with_move_types!($move_gen, $pos, 0),
-            GenPhase::Quiet => generate_moves_with_move_types!($move_gen, $pos, 1),
-            GenPhase:: Done => return None
+        // Match color
+        match $pos.active_color {
+            Color::White => generate_moves_match_phase!($move_gen, $pos, true),
+            Color::Black => generate_moves_match_phase!($move_gen, $pos, false),
         }
     };
 }
@@ -98,8 +108,9 @@ impl MoveGenerator {
         extracted
     }
 
-    fn insert_and_score<const Sort: bool>(&mut self, new_move: &mut Move) {
-        if self.is_sorting {
+    #[inline(always)]
+    fn insert_and_score<const ConstSort: bool>(&mut self, new_move: &mut Move) {
+        if ConstSort {
             Self::score_move(new_move) // Maybe handle scoring different
         }
         self.insert(*new_move)
@@ -111,26 +122,38 @@ impl MoveGenerator {
         self.insert_index += 1;
     }
 
-    pub fn score_move(m: &mut Move) {
+    fn score_move(m: &mut Move) {
         m.score = 10; // Fake it. Should probably be moved to seperate place
     }
 
     /// Generate interesting moves
     /// 
     /// Check evasions, captures, promotions
-    fn generate_moves<const ConstColor: bool, const Phase: u8, const Sort: bool>(&mut self, pos: &Position) {
-        let active_player = if ConstColor {Color::White} else {Color::Black};
-        let gen_phase: GenPhase = unsafe {std::mem::transmute(Phase)}; // Always a legal phase!
-        let is_sorting = Sort;
+    fn generate_moves<const IS_WHITE: bool, const PHASE: u8, const IS_SORTING: bool, const HAS_ENPASSANT: bool>(&mut self, pos: &Position) {
+        let active_color = if IS_WHITE { Color::White } else {Color::Black };
+        
+        // Go straight to check evasions if in check
+        if pos.is_in_check(active_color) {
+            self.generate_check_evasions::<IS_WHITE>(pos);
+            return
+        }
+        
+        let gen_phase: GenPhase = unsafe { std::mem::transmute(PHASE) }; // Always a legal phase!
+        let is_sorting = IS_SORTING;
+        let has_enpassant = HAS_ENPASSANT;
 
-        match active_player {
+        let king_pos = pos.king_position(active_color);
+
+        let king_file = FILE_MASKS[king_pos as usize];
+        let king_rank = RANK_MASKS[king_pos as usize];
+
+        let opp_hv_sliders = pos.get_piece_color_bitboard(Rook, active_color);
+
+        //while let Some()
+
+        match active_color {
             Color::White => { },
             Color::Black => { },
-        }
-
-        if pos.is_in_check() {
-            self.generate_check_evasions::<ConstColor>(pos);
-            return
         }
 
         match gen_phase {
@@ -144,6 +167,10 @@ impl MoveGenerator {
             GenPhase::Quiet => { self.phase = GenPhase::Done },
             _ => { }
         }
+    }
+
+    fn get_hv_slider_mask() {
+
     }
 
     /// Generate check evasions
@@ -165,5 +192,5 @@ pub fn test() {
     let pos = Position::new_from_start_pos();
     let mut gene = MoveGenerator::new(&pos, MoveTypes::All, false);
 
-    let _ = gene.next_move(&pos);
+    println!("{:?}", gene.next_move(&pos));
 }

@@ -211,6 +211,6 @@ impl Position {
             }
         }
 
-        if self.active_player == Color::White { score } else { -score } // Colud avoid branching here
+        if self.active_color == Color::White { score } else { -score } // Colud avoid branching here
     }
 }
