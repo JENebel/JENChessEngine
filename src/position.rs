@@ -61,11 +61,11 @@ impl Position {
         println!("  └────┴────┴────┴────┴────┴────┴────┴────┘");
         println!("    a    b    c    d    e    f    g    h\n");
 
-        print!("   Active:     {}",     if self.active_player == Color::White { "White" } else { "Black" });
-        println!("\tFull moves: {}",    self.full_moves);
-        print!("   Enpassant:  {}",     SQUARE_STRINGS[self.enpassant_square as usize]);
-        println!("\tHalf moves: {}",    self.half_moves);
-        print!("   Castling:   {}  ", self.castling_ability_string());
+          print!("   Active:     {}",     if self.active_player == Color::White { "White" } else { "Black" });
+        println!("\tFull moves: {}",      self.full_moves);
+          print!("   Enpassant:  {}",     SQUARE_STRINGS[self.enpassant_square as usize]);
+        println!("\tHalf moves: {}",      self.half_moves);
+          print!("   Castling:   {}  ",   self.castling_ability_string());
         println!("\tZobrist:   {:#0x}\n", self.zobrist_hash);
     }
 
@@ -145,6 +145,7 @@ impl Position {
             pinned_hv_black:   Bitboard::default(),
             pinned_diag_black: Bitboard::default(),
             check_mask:        Bitboard::default(),
+            pin_mask_white:        Bitboard::default(),
 
             active_player,
             castling_ability,

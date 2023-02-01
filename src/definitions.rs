@@ -4,7 +4,7 @@
 /// General                          ///
 ////////////////////////////////////////
 
-use std::fmt::Display;
+use std::{fmt::Display, default};
 
 use crate::{move_generator::MoveGenerator, position::Position};
 
@@ -96,6 +96,12 @@ pub enum PieceType {
     Rook,
     Queen,
     King,
+}
+
+impl Default for PieceType {
+    fn default() -> Self {
+        Self::Pawn
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -213,7 +219,7 @@ impl Default for Settings {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub struct Move {
     pub from_sq: u8,
     pub to_sq: u8,
@@ -231,7 +237,7 @@ impl Move {
     pub fn new(
         from_sq: u8,
         to_sq: u8,
-        piece: Piece,
+        piece_type: PieceType,
         promotion: Piece,
         is_capture: bool,
         is_double_push: bool,
@@ -240,7 +246,7 @@ impl Move {
             Self {
                 from_sq,
                 to_sq,
-                piece,
+                piece_type,
                 promotion,
                 is_capture,
                 is_double_push,
@@ -253,23 +259,7 @@ impl Move {
 
 impl Display for Move {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} @ {} -> {}", self.piece, SQUARE_STRINGS[self.from_sq as usize], SQUARE_STRINGS[self.to_sq as usize])
-    }
-}
-
-impl Default for Move {
-    fn default() -> Self {
-        Self { 
-            from_sq:        Default::default(),
-            to_sq:          Default::default(),
-            piece:          Default::default(),
-            promotion:      Default::default(),
-            is_capture:     Default::default(),
-            is_double_push: Default::default(),
-            is_enpassant:   Default::default(),
-            is_castling:    Default::default(),
-            score:          Default::default(),
-        }
+        write!(f, /*"{}*/" @ {} -> {}", /*self.piece_type,*/ SQUARE_STRINGS[self.from_sq as usize], SQUARE_STRINGS[self.to_sq as usize])
     }
 }
 

@@ -1,5 +1,32 @@
 use crate::{position::Position, definitions::*, bitboard::Bitboard};
 
+// Macros to expand const generics for move generation
+macro_rules! generate_moves_with_color {
+    ($move_gen: expr, $pos: expr, $phase: expr, $color: expr) => {
+        match $move_gen.is_sorting {
+            true =>  $move_gen.generate_moves::<true,  $phase, true>($pos),
+            false => $move_gen.generate_moves::<false, $phase, false>($pos),
+        }
+    };
+}
+macro_rules! generate_moves_with_move_types {
+    ($move_gen: expr, $pos: expr, $phase: expr) => {
+        match $pos.active_player {
+            Color::White => generate_moves_with_color!($move_gen, $pos, $phase, true),
+            Color::Black => generate_moves_with_color!($move_gen, $pos, $phase, false),
+        }
+    };
+}
+macro_rules! generate_moves {
+    ($move_gen: expr, $pos: expr) => {
+        match $move_gen.phase {
+            GenPhase::Interesting => generate_moves_with_move_types!($move_gen, $pos, 0),
+            GenPhase::Quiet => generate_moves_with_move_types!($move_gen, $pos, 1),
+            GenPhase:: Done => return None
+        }
+    };
+}
+
 pub struct MoveGenerator {
     move_types: MoveTypes,
     phase: GenPhase,
@@ -34,21 +61,7 @@ impl MoveGenerator {
     pub fn next_move(&mut self, pos: &Position) -> Option<Move> {
         // Try generating more moves until some are found, or there are none left
         while self.extract_index == self.insert_index {
-            match self.phase {
-                GenPhase::Interesting => {
-                    self.generate_interesting_moves(pos);
-                    if self.move_types == MoveTypes::All {
-                        self.phase = GenPhase::Quiet;
-                    } else {
-                        self.phase = GenPhase::Done;
-                    }
-                },
-                GenPhase::Quiet => {
-                    self.generate_quiet_moves(pos);
-                    self.phase = GenPhase::Done;
-                },
-                GenPhase::Done => return None,
-            }
+            generate_moves!(self, pos)
         }
 
         if self.is_sorting {
@@ -85,7 +98,7 @@ impl MoveGenerator {
         extracted
     }
 
-    fn insert_and_score(&mut self, new_move: &mut Move) {
+    fn insert_and_score<const Sort: bool>(&mut self, new_move: &mut Move) {
         if self.is_sorting {
             Self::score_move(new_move) // Maybe handle scoring different
         }
@@ -102,33 +115,55 @@ impl MoveGenerator {
         m.score = 10; // Fake it. Should probably be moved to seperate place
     }
 
-
     /// Generate interesting moves
     /// 
     /// Check evasions, captures, promotions
-    fn generate_interesting_moves(&mut self, pos: &Position) {
+    fn generate_moves<const ConstColor: bool, const Phase: u8, const Sort: bool>(&mut self, pos: &Position) {
+        let active_player = if ConstColor {Color::White} else {Color::Black};
+        let gen_phase: GenPhase = unsafe {std::mem::transmute(Phase)}; // Always a legal phase!
+        let is_sorting = Sort;
+
+        match active_player {
+            Color::White => { },
+            Color::Black => { },
+        }
+
         if pos.is_in_check() {
-            self.generate_check_evasions(pos);
+            self.generate_check_evasions::<ConstColor>(pos);
             return
+        }
+
+        match gen_phase {
+            GenPhase::Interesting => {
+                if self.move_types == MoveTypes::All {
+                    self.phase = GenPhase::Quiet
+                } else {
+                    self.phase = GenPhase::Done
+                }
+            },
+            GenPhase::Quiet => { self.phase = GenPhase::Done },
+            _ => { }
         }
     }
 
     /// Generate check evasions
-    fn generate_check_evasions(&mut self, pos: &Position) {
-
+    fn generate_check_evasions<const ConstColor: bool>(&mut self, pos: &Position) {
         ///////
 
         // Should not generate more moves as this generates all possible
         self.phase = GenPhase::Done
     }
 
-    /// Generate quiet moves
-    fn generate_quiet_moves(&mut self, pos: &Position) {
-
-    }
-
     /// Generates all legal king moves
     fn generate_king_moves() {
         
     }
+}
+
+#[test]
+pub fn test() {
+    let pos = Position::new_from_start_pos();
+    let mut gene = MoveGenerator::new(&pos, MoveTypes::All, false);
+
+    let _ = gene.next_move(&pos);
 }
