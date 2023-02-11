@@ -7,6 +7,8 @@ ELO is around 2200.
 
 If you are lucky it is online and accepting challenges on lichess: https://lichess.org/@/JENCE
 
+Development is well under way for the [successor to this engine](https://github.com/PQNebel/Cadabra).
+
 It has the following features:
 * Backbone
   * Bitboards
