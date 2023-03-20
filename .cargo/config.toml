@@ -5,4 +5,3 @@ rustflags = ["-Ctarget-cpu=native"]
 opt-level = 3
 lto = true
 codegen-units = 1
-incremental = true

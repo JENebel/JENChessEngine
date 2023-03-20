@@ -1,5 +1,3 @@
-use rayon::prelude::*;
-
 use super::*;
 pub struct MoveList {
     moves: [Move; MOVE_LIST_SIZE],
@@ -49,10 +47,6 @@ impl MoveList {
 
     pub fn iter(&self) -> std::iter::Take<std::slice::Iter<'_, cmove::Move>> {
         self.moves.iter().take(self.count)
-    }
-
-    pub fn par_iter(&self) -> rayon::iter::Take<rayon::slice::Iter<'_, cmove::Move>> {
-        self.moves.par_iter().take(self.count)
     }
 
     pub fn bulk_count(&self, game: &mut Game) -> usize {

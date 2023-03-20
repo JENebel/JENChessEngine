@@ -1,5 +1,3 @@
-use rayon::prelude::*;
-
 use super::*;
 
 pub fn perft(game: &mut Game, depth: u8, print: bool) -> u128 {
@@ -9,36 +7,18 @@ pub fn perft(game: &mut Game, depth: u8, print: bool) -> u128 {
         return moves.bulk_count(game) as u128;
     }
 
-    if depth > 2 {
-        moves.par_iter().map(|m| {
-            let mut copy = *game;
-    
-            if make_move(&mut copy, &m) {
-                let r = perft(&mut copy, depth - 1, false);
+    moves.iter().map(|m| {
+        let mut copy = *game;
 
-                if print {
-                    println!("{}{}: {}", SQUARE_STRINGS[m.from_square() as usize], SQUARE_STRINGS[m.to_square() as usize], r)
-                }
-    
-                r
+        if make_move(&mut copy, &m) {
+            let r = perft(&mut copy, depth - 1, false);
+
+            if print {
+                println!("{}{}: {}", SQUARE_STRINGS[m.from_square() as usize], SQUARE_STRINGS[m.to_square() as usize], r)
             }
-            else { 0 }
-        }).sum()
-    }
-    else {
-        moves.iter().map(|m| {
-            let mut copy = *game;
-    
-            if make_move(&mut copy, &m) {
-                let r = perft(&mut copy, depth - 1, false);
-    
-                if print {
-                    println!("{}{}: {}", SQUARE_STRINGS[m.from_square() as usize], SQUARE_STRINGS[m.to_square() as usize], r)
-                }
-    
-                r
-            }
-            else { 0 }
-        }).sum()
-    }
+
+            r
+        }
+        else { 0 }
+    }).sum()
 }
