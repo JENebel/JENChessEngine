@@ -423,16 +423,18 @@ fn psuite_long() {
 }
 
 fn print_help() {
-    println!(" Commands:");
-    println!("  {}", "help                                  - Displays all legal commands");
-    println!("  {}", "exit/x/quit                           - Closes application");
-    println!("  {}", "d                                     - Displays the current board");
-    println!("  {}", "position [startpos/fen(fen string)]]  - Sets the game to the given FEN, or to the initial state with \"start\"");
-    println!("  {}", "fen                                   - Prints the FEN string for the current position");
-    println!("  {}", "perft (opt) [depth]                   - Counts the number of legal moves at the given depth. Add the simple as \"opt\" to do barebones");
-    println!("  {}", "perft! [depth]                        - Does a simple perft for every PLY up to n");
-    println!("  {}", "unmake/undo                           - Unmakes last move if possible");
-    println!("  {}", "make/move [move]                      - Make move with active player. move example: \"h3h4\" in case of promotion, add a Q, R, B or N, so fx. \"a6a7Q\"");
-    println!("  {}", "psuite (opt)                          - Performs an extensive performance test with perft on several positions. \"opt\" can be \"long\" for longer test");
-    println!("  {}", "eval                                  - Evaluates the current position, and shows the result");
+    println!(" x/exit/quit             All 3 variants exit the program
+ d                       Displays the current board
+ position startpos       Loads the starting position. Moves can be provided after: \"position startpos moves a2a4 a6a5\"
+ position fen [fen]      Loads a position from a given fen string. Moves can be provided like for startpos
+ perft [depth]           Finds number of legal moves at some depth
+ perft [depth] simple    Same as perft but does not print result pr. move
+ perft! [depth]          Performs a seperate simple perft for each depth <= [depth]
+ unmake/undo             Unmakes the last made move if one exists
+ make/move [move]        Make a move on the board. On the standard UCI form: \"a2a4\" and one of \"kbrq\" appended for promotions
+ eval                    Prints the heuristic evaluation of the current position
+ psuite                  Runs a suite of perft tests to validate movegenerator and to test performance
+ psuite long             Same as psuite but runs to a deeper depth
+ sbench                  Runs a benchmark of the searching algorithm
+ help                    Writes out all legal commands. Note that the list provided from this command is out of date")
 }
