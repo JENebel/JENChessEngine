@@ -1,4 +1,5 @@
 # JENChessEngine
+
 JENChessEngine, or just JENCE, is a chess engine written in rust.
 
 ELO is around 2200.
@@ -8,15 +9,16 @@ If you are lucky it is online and accepting challenges on [Lichess](https://lich
 Development is well under way for the successor to this engine, [Cadabra](https://github.com/PQNebel/Cadabra).
 
 ## Using the engine
+
+Note that a BMI2 enabled cpu is required. This should be supported by all newer x86 processors.
+
+Binaries for linux and windows are available under the latest release, but the best performance is achieved by compiling the source. In testing the provided binary is 10-20% slower than a natively compiled one.
+
 It is simply compiled with
 
     cargo build --release
 
-or run with
-    
-    cargo run --release
-
-The engine uses the [UCI](https://www.wbec-ridderkerk.nl/html/UCIProtocol.html) interface for automatic playing with these commands:
+The engine uses the [UCI](https://backscattering.de/chess/uci/) interface for automatic playing with these commands:
 
     x/exit/quit             // All 3 variants exit the program
     d                       // Displays the current board
@@ -34,11 +36,14 @@ The engine uses the [UCI](https://www.wbec-ridderkerk.nl/html/UCIProtocol.html) 
     help                    // Writes out all legal commands. Note that the list provided from this command is out of date
 
 ## Technicalities
+
 ### Move generation
-The engine uses bitboards, and pre-calculated attack tables with PEXT indexing for sliding piece move generation\
-This means that a BMI2 enabled cpu is required. This is supported by all newer x86 processors.
+
+The engine uses bitboards, and pre-calculated attack tables with PEXT indexing for sliding piece move generation.\
+This is why bmi2 is required.
 
 ### Search
+
 * Move ordering heuristics
   * PV first
   * MVV_LVA table
@@ -63,11 +68,13 @@ This means that a BMI2 enabled cpu is required. This is supported by all newer x
   * Simple king safety
   
 ## Credits
+
 * [CodeMonkeyKing](https://github.com/maksimKorzh)'s [BBC](https://github.com/maksimKorzh/bbc) has been a very important inspiration and help with his great [YouTube series](https://youtube.com/playlist?list=PLmN0neTso3Jxh8ZIylk74JpwfiWNI76Cs)
 * The [Chess Programming Wiki](https://www.chessprogramming.org/Main_Page) is an awesome reasource.
 * And of course all the open source chess engines out there!
 
 ## Limitations
+
 * No options can be changed through the UCI interface.
 * It is not very portable as it requires a BMI2 enabled CPU.
-* The code is not very idiomatic (or pretty), as it was one of my first projects in Rust. See the successor [Cadabra](https://github.com/PQNebel/Cadabra)
+* The code is not very idiomatic (or pretty), as it was one of my first projects in Rust. See the successor [Cadabra](https://github.com/PQNebel/Cadabra).
